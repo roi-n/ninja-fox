@@ -198,9 +198,7 @@ class Game {
             }
 
             // Check mobile buttons
-            if (this.input.buttonJumpWasPressed ||
-                this.input.buttonAWasPressed ||
-                this.input.buttonBWasPressed) {
+            if (this.input.wasMobileKeyPressed()) {
                 this.startGame();
                 return;
             }
@@ -210,7 +208,7 @@ class Game {
 
         if (this.state === 'gameover') {
             // Check for space to retry - use key down instead of key pressed
-            if (this.input.isKeyDown(' ')) {
+            if (this.input.isKeyDown(' ') || this.input.wasMobileKeyPressed()) {
                 console.log("restarting!!")
                 this.input.reset();
                 this.startGame();
@@ -221,7 +219,7 @@ class Game {
 
         if (this.state === 'paused') {
             // Check for space to unpause
-            if (this.input.isKeyPressed(' ')) {
+            if (this.input.isKeyPressed(' ') || this.input.wasMobileKeyPressed()) {
                 this.state = 'playing';
             }
             return;

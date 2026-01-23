@@ -82,6 +82,10 @@ class InputHandler {
         return false;
     }
 
+    wasMobileKeyPressed() {
+        return this.buttonJumpWasPressed || this.buttonAWasPressed || this.buttonBWasPressed;
+    }
+
     isKeyPressed(key) {
         // Check keyboard first
         const pressed = this.keyPressed[key.toLowerCase()];
