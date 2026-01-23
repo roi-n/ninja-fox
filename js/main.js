@@ -19,9 +19,11 @@ class Game {
         this.ctx.imageSmoothingEnabled = false;
 
         // Game state
-        this.state = 'splash'; // splash, playing, gameover
+        this.state = 'splash'; // splash, playing, gameover, paused
         this.score = 0;
         this.distance = 0;
+        this.nextHeartScore = 100; // Next score milestone for heart restoration
+        this.heartAnimation = null; // {x, y, time} for heart animation
 
         // Systems
         this.input = new InputHandler();
@@ -96,8 +98,11 @@ class Game {
 
     startGame() {
         this.state = 'playing';
+        this.prevState = '';
         this.score = 0;
         this.distance = 0;
+        this.nextHeartScore = 100;
+        this.heartAnimation = null;
 
         // Reset input state to prevent stuck keys
         this.input.reset();
@@ -125,31 +130,48 @@ class Game {
         // Clean up off-screen stars
         this.stars = this.stars.filter(star => !star.collected && star.x > this.camera.x - 50);
 
+        // Get suitable platforms (prefer ones ahead of camera, but use all if needed)
+        let suitablePlatforms = this.platforms.platforms.filter(p => p.x > cameraRight - 200);
+        if (suitablePlatforms.length === 0) {
+            suitablePlatforms = this.platforms.platforms;
+        }
+
+        if (suitablePlatforms.length === 0) return; // No platforms, can't spawn stars
+
         // Spawn new stars ahead
-        while (this.stars.length < 10) {
-            const platform = this.platforms.platforms[
-                Math.floor(Math.random() * this.platforms.platforms.length)
+        let attempts = 0;
+        const maxAttempts = 100; // Prevent infinite loop
+        while (this.stars.length < 10 && attempts < maxAttempts) {
+            attempts++;
+
+            const platform = suitablePlatforms[
+                Math.floor(Math.random() * suitablePlatforms.length)
             ];
 
-            if (platform && platform.x > cameraRight - 200) {
-                const star = new Star(
-                    platform.x + Math.random() * platform.width,
-                    platform.y - 30 - Math.random() * 40
-                );
+            const star = new Star(
+                platform.x + Math.random() * platform.width,
+                platform.y - 30 - Math.random() * 40
+            );
 
-                // Check if too close to existing stars
-                const tooClose = this.stars.some(s =>
-                    Math.abs(s.x - star.x) < 30 && Math.abs(s.y - star.y) < 30
-                );
+            // Check if too close to existing stars
+            const tooClose = this.stars.some(s =>
+                Math.abs(s.x - star.x) < 30 && Math.abs(s.y - star.y) < 30
+            );
 
-                if (!tooClose) {
-                    this.stars.push(star);
-                }
+            if (!tooClose) {
+                this.stars.push(star);
             }
         }
     }
 
     update(dt) {
+        
+        
+        if (this.state != this.prevState){
+            console.log(`in state: ${this.state}`)
+        }
+        this.prevState = this.state;
+
         if (this.state === 'splash') {
             this.splashTime += dt;
 
@@ -163,13 +185,29 @@ class Game {
         if (this.state === 'gameover') {
             // Check for space to retry - use key down instead of key pressed
             if (this.input.isKeyDown(' ')) {
+                console.log("restarting!!")
                 this.input.reset();
                 this.startGame();
+                console.log("restarted!!")
+            }
+            return;
+        }
+
+        if (this.state === 'paused') {
+            // Check for space to unpause
+            if (this.input.isKeyPressed(' ')) {
+                this.state = 'playing';
             }
             return;
         }
 
         if (this.state !== 'playing') return;
+
+        // Check for pause during gameplay
+        if (this.input.isKeyPressed(' ')) {
+            this.state = 'paused';
+            return;
+        }
 
         // Update player
         const soundEffect = this.player.handleInput(this.input, dt);
@@ -274,6 +312,28 @@ class Game {
         // Update distance
         this.distance = Math.floor(this.player.x / 10);
 
+        // Check for heart restoration every 100 points
+        if (this.score >= this.nextHeartScore) {
+            if (this.player.health < this.player.maxHealth) {
+                this.player.health++;
+                this.heartAnimation = {
+                    x: this.player.x + this.player.width / 2,
+                    y: this.player.y,
+                    time: 0
+                };
+                this.audio.playSound('star'); // Reuse star sound for heart
+            }
+            this.nextHeartScore += 100;
+        }
+
+        // Update heart animation
+        if (this.heartAnimation) {
+            this.heartAnimation.time += dt;
+            if (this.heartAnimation.time > 1.0) {
+                this.heartAnimation = null;
+            }
+        }
+
         // Update screen shake
         if (this.shakeTime > 0) {
             this.shakeTime -= dt;
@@ -346,10 +406,47 @@ class Game {
         // Draw particles
         this.particles.draw(this.ctx);
 
+        // Draw heart animation
+        if (this.heartAnimation) {
+            const progress = this.heartAnimation.time / 1.0;
+            const screenX = this.heartAnimation.x - this.camera.x;
+            const screenY = this.heartAnimation.y - this.camera.y - (progress * 30); // Float upward
+            const alpha = 1 - progress;
+
+            this.ctx.save();
+            this.ctx.globalAlpha = alpha;
+
+            // Draw heart
+            this.ctx.fillStyle = '#FF0000';
+            this.ctx.fillRect(screenX - 4, screenY, 3, 2);
+            this.ctx.fillRect(screenX + 1, screenY, 3, 2);
+            this.ctx.fillRect(screenX - 4, screenY + 2, 8, 6);
+            this.ctx.fillRect(screenX - 3, screenY + 8, 6, 2);
+            this.ctx.fillRect(screenX - 2, screenY + 10, 4, 2);
+
+            // Highlight
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.fillRect(screenX - 3, screenY + 1, 1, 1);
+            this.ctx.fillRect(screenX + 2, screenY + 1, 1, 1);
+
+            // +1 text
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 10px "Courier New"';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('+1', screenX, screenY - 5);
+
+            this.ctx.restore();
+        }
+
         this.ctx.restore();
 
         // Draw HUD
         this.drawHUD();
+
+        // Draw pause overlay if paused
+        if (this.state === 'paused') {
+            this.drawPauseOverlay();
+        }
     }
 
     drawSplash() {
@@ -454,6 +551,45 @@ class Game {
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '12px "Courier New"';
         this.ctx.fillText('PRESS SPACE TO RETRY', this.width / 2, this.height / 2 + 70);
+    }
+
+    drawPauseOverlay() {
+        // Semi-transparent blur effect (simulated with checkerboard pattern)
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        this.ctx.fillRect(0, 0, this.width, this.height);
+
+        // Checkerboard pattern for blur effect
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        for (let x = 0; x < this.width; x += 4) {
+            for (let y = 0; y < this.height; y += 4) {
+                if ((x + y) % 8 === 0) {
+                    this.ctx.fillRect(x, y, 2, 2);
+                }
+            }
+        }
+
+        // PAUSED text with glow effect
+        this.ctx.save();
+        this.ctx.textAlign = 'center';
+
+        // Glow
+        this.ctx.shadowColor = '#00FFFF';
+        this.ctx.shadowBlur = 20;
+        this.ctx.fillStyle = '#00FFFF';
+        this.ctx.font = 'bold 40px "Courier New"';
+        this.ctx.fillText('PAUSED', this.width / 2, this.height / 2);
+
+        // Main text
+        this.ctx.shadowBlur = 0;
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.fillText('PAUSED', this.width / 2, this.height / 2);
+
+        // Instructions
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = '12px "Courier New"';
+        this.ctx.fillText('PRESS SPACE TO RESUME', this.width / 2, this.height / 2 + 40);
+
+        this.ctx.restore();
     }
 
     drawHUD() {

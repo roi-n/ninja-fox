@@ -96,12 +96,12 @@ class Player {
         }
 
         // Attacks (can be done in air too for better reactivity)
-        if (input.isKeyPressed('.')) {
+        if (input.isKeyPressed(',')) {
             this.startKick();
             return 'kick';
         }
 
-        if (input.isKeyPressed('/')) {
+        if (input.isKeyPressed('.')) {
             this.startStab();
             return 'sword';
         }
@@ -250,11 +250,12 @@ class Player {
                 height: this.height + 20
             };
         } else if (this.attackType === 'stab') {
+            // Vertical slash from up to down
             return {
-                x: this.facing > 0 ? this.x + this.width : this.x - 20,
-                y: this.y + 4,
-                width: 20,
-                height: this.height - 8
+                x: this.facing > 0 ? this.x + this.width - 8 : this.x - 8,
+                y: this.y - 10,
+                width: 16,
+                height: this.height + 20
             };
         }
         return null;
@@ -361,18 +362,25 @@ class Player {
             ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
             ctx.fillRect(trailX - 2, trailY - 2, 4, 4);
         } else if (this.state === 'stabbing') {
-            // Sword with metallic shine
+            // Vertical sword slash from up to down
+            const slashProgress = this.stateTime / this.attackTime;
+            const slashY = -8 + slashProgress * 30; // Animates from top to bottom
+
+            // Sword blade (vertical)
             ctx.fillStyle = '#C0C0C0';
-            ctx.fillRect(22, 10, 10, 3);
-            ctx.fillRect(21, 11, 1, 1); // Tip
+            ctx.fillRect(20, slashY, 3, 20);
 
             // Blade highlight
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(23, 10, 8, 1);
+            ctx.fillRect(20, slashY, 1, 18);
 
-            // Handle
+            // Motion blur effect
+            ctx.fillStyle = 'rgba(192, 192, 192, 0.3)';
+            ctx.fillRect(21, slashY - 4, 2, 24);
+
+            // Handle at top
             ctx.fillStyle = '#8B4513';
-            ctx.fillRect(22, 9, 3, 5);
+            ctx.fillRect(19, slashY - 3, 5, 3);
         }
     }
 }
