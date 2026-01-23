@@ -25,6 +25,8 @@ class Game {
 
         // Systems
         this.input = new InputHandler();
+        this.mobileControls = new MobileControls();
+        this.input.setMobileControls(this.mobileControls);
         this.audio = new AudioManager();
         this.particles = new ParticleSystem();
 
