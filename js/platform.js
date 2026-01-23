@@ -200,3 +200,107 @@ class Star {
         ctx.restore();
     }
 }
+
+class Magazine {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 16;
+        this.height = 12;
+        this.collected = false;
+        this.bobTime = Math.random() * Math.PI * 2;
+        this.baseY = y;
+    }
+
+    update(dt) {
+        this.bobTime += dt * 2;
+        this.y = this.baseY + Math.sin(this.bobTime) * 3;
+    }
+
+    draw(ctx, camera) {
+        if (this.collected) return;
+
+        const screenX = this.x - camera.x;
+        const screenY = this.y - camera.y;
+
+        // Draw magazine (ammo box)
+        // Main box (brown/tan)
+        ctx.fillStyle = '#D2691E';
+        ctx.fillRect(screenX + 2, screenY + 2, 12, 8);
+
+        // Top (darker)
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(screenX + 2, screenY + 2, 12, 2);
+
+        // Bullets visible at top (yellow/orange)
+        ctx.fillStyle = '#FFA500';
+        ctx.fillRect(screenX + 4, screenY, 2, 3);
+        ctx.fillRect(screenX + 7, screenY, 2, 3);
+        ctx.fillRect(screenX + 10, screenY, 2, 3);
+
+        // Bullet tips (brass)
+        ctx.fillStyle = '#FFD700';
+        ctx.fillRect(screenX + 4, screenY, 2, 1);
+        ctx.fillRect(screenX + 7, screenY, 2, 1);
+        ctx.fillRect(screenX + 10, screenY, 2, 1);
+
+        // Outline/detail
+        ctx.strokeStyle = '#654321';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(screenX + 2, screenY + 2, 12, 8);
+    }
+}
+
+class Heart {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 16;
+        this.height = 16;
+        this.collected = false;
+        this.bobTime = Math.random() * Math.PI * 2;
+        this.baseY = y;
+    }
+
+    update(dt) {
+        this.bobTime += dt * 2.5;
+        this.y = this.baseY + Math.sin(this.bobTime) * 4;
+    }
+
+    draw(ctx, camera) {
+        if (this.collected) return;
+
+        const screenX = this.x - camera.x;
+        const screenY = this.y - camera.y;
+
+        // Draw heart with pulsing glow effect
+        const pulse = Math.sin(this.bobTime * 2) * 0.3 + 0.7;
+
+        ctx.save();
+        ctx.globalAlpha = pulse;
+
+        // Outer glow (yellow/gold)
+        ctx.fillStyle = '#FFD700';
+        ctx.fillRect(screenX + 2, screenY + 1, 4, 2);
+        ctx.fillRect(screenX + 10, screenY + 1, 4, 2);
+        ctx.fillRect(screenX + 1, screenY + 3, 14, 8);
+        ctx.fillRect(screenX + 2, screenY + 11, 12, 2);
+        ctx.fillRect(screenX + 4, screenY + 13, 8, 2);
+
+        ctx.restore();
+
+        // Main heart (bright red)
+        ctx.fillStyle = '#FF0000';
+        ctx.fillRect(screenX + 3, screenY + 2, 4, 2);
+        ctx.fillRect(screenX + 9, screenY + 2, 4, 2);
+        ctx.fillRect(screenX + 2, screenY + 4, 12, 8);
+        ctx.fillRect(screenX + 3, screenY + 12, 10, 2);
+        ctx.fillRect(screenX + 5, screenY + 14, 6, 2);
+
+        // Bright highlights
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(screenX + 4, screenY + 3, 2, 2);
+        ctx.fillRect(screenX + 10, screenY + 3, 2, 2);
+        ctx.fillRect(screenX + 6, screenY + 6, 1, 1);
+    }
+}

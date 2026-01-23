@@ -22,8 +22,6 @@ class Game {
         this.state = 'splash'; // splash, playing, gameover, paused
         this.score = 0;
         this.distance = 0;
-        this.nextHeartScore = 100; // Next score milestone for heart restoration
-        this.heartAnimation = null; // {x, y, time} for heart animation
 
         // Systems
         this.input = new InputHandler();
@@ -35,6 +33,13 @@ class Game {
         this.platforms = null;
         this.enemies = null;
         this.stars = [];
+        this.playerBullets = [];
+        this.magazines = [];
+        this.hearts = [];
+
+        // Spawn tracking
+        this.nextMagazineSpawn = 0;
+        this.nextHeartSpawn = 0;
 
         // Camera
         this.camera = {
@@ -101,8 +106,6 @@ class Game {
         this.prevState = '';
         this.score = 0;
         this.distance = 0;
-        this.nextHeartScore = 100;
-        this.heartAnimation = null;
 
         // Reset input state to prevent stuck keys
         this.input.reset();
@@ -112,6 +115,15 @@ class Game {
         this.platforms = new PlatformGenerator(this.width, this.height);
         this.enemies = new EnemyManager(this.platforms, this.height);
         this.stars = [];
+        this.playerBullets = [];
+        this.magazines = [];
+        this.hearts = [];
+
+        // Initialize spawn distances with variance
+        this.nextMagazineSpawn = GameConfig.magazineSpawnDistance +
+            (Math.random() * 2 - 1) * GameConfig.spawnVariance;
+        this.nextHeartSpawn = GameConfig.heartSpawnDistance +
+            (Math.random() * 2 - 1) * GameConfig.spawnVariance;
 
         // Spawn initial stars
         this.spawnStars();
@@ -212,7 +224,12 @@ class Game {
         // Update player
         const soundEffect = this.player.handleInput(this.input, dt);
         if (soundEffect) {
-            this.audio.playSound(soundEffect);
+            if (typeof soundEffect === 'string') {
+                this.audio.playSound(soundEffect);
+            } else if (soundEffect.type === 'shoot' && soundEffect.bullet) {
+                this.playerBullets.push(soundEffect.bullet);
+                this.audio.playSound('sword'); // Reuse sword sound for gunshot
+            }
         }
 
         const landed = this.player.update(dt, this.platforms);
@@ -287,6 +304,56 @@ class Game {
             }
         }
 
+        // Update player bullets
+        this.playerBullets = this.playerBullets.filter(bullet => {
+            if (bullet.dead) return false;
+            if (bullet.x < this.camera.x - 50 || bullet.x > this.camera.x + this.width + 50) return false;
+
+            bullet.update(dt);
+
+            // Check collision with enemies
+            for (let enemy of this.enemies.enemies) {
+                if (enemy.dead) continue;
+
+                if (CollisionDetector.checkAABB(bullet.getBounds(), enemy.getBounds())) {
+                    bullet.dead = true;
+                    const killed = enemy.takeDamage(1);
+                    if (killed) {
+                        this.audio.playSound('enemy');
+                        this.score += enemy.points;
+                        this.particles.emit(
+                            enemy.x + enemy.width / 2,
+                            enemy.y + enemy.height / 2,
+                            8,
+                            '#00FF00'
+                        );
+                        this.screenShake(2, 0.1);
+                    }
+                    return false;
+                }
+            }
+
+            // Check collision with enemy bullets
+            for (let enemyBullet of this.enemies.bullets) {
+                if (enemyBullet.dead) continue;
+
+                if (CollisionDetector.checkAABB(bullet.getBounds(), enemyBullet.getBounds())) {
+                    bullet.dead = true;
+                    enemyBullet.dead = true;
+                    this.particles.emit(
+                        (bullet.x + enemyBullet.x) / 2,
+                        (bullet.y + enemyBullet.y) / 2,
+                        6,
+                        '#FFFF00'
+                    );
+                    this.score += 2; // Bonus for shooting enemy bullets
+                    return false;
+                }
+            }
+
+            return true;
+        });
+
         // Update stars
         this.stars.forEach(star => star.update(dt));
 
@@ -306,33 +373,104 @@ class Game {
         // Spawn more stars
         this.spawnStars();
 
+        // Update magazines
+        this.magazines.forEach(mag => mag.update(dt));
+
+        // Check magazine collection
+        this.magazines = this.magazines.filter(mag => {
+            if (mag.collected) return false;
+
+            if (CollisionDetector.checkAABB(
+                { x: this.player.x, y: this.player.y, width: this.player.width, height: this.player.height },
+                { x: mag.x, y: mag.y, width: mag.width, height: mag.height }
+            )) {
+                mag.collected = true;
+                const ammoGained = Math.min(5, this.player.maxAmmo - this.player.ammo);
+                this.player.ammo = Math.min(this.player.maxAmmo, this.player.ammo + 5);
+                this.audio.playSound('star');
+                this.particles.emit(mag.x + 8, mag.y + 6, 8, '#FFA500');
+                return false;
+            }
+
+            // Remove magazines far behind camera
+            if (mag.x < this.camera.x - 100) return false;
+
+            return true;
+        });
+
+        // Spawn magazines based on distance
+        if (this.player.x >= this.nextMagazineSpawn) {
+            const suitablePlatforms = this.platforms.platforms.filter(p =>
+                p.x > this.nextMagazineSpawn - 100 &&
+                p.x < this.nextMagazineSpawn + 100 &&
+                p.y < this.height - 50
+            );
+
+            if (suitablePlatforms.length > 0) {
+                const platform = suitablePlatforms[Math.floor(Math.random() * suitablePlatforms.length)];
+                this.magazines.push(new Magazine(
+                    platform.x + Math.random() * Math.max(0, platform.width - 16),
+                    platform.y - 30
+                ));
+            }
+
+            // Schedule next magazine spawn
+            this.nextMagazineSpawn += GameConfig.magazineSpawnDistance +
+                (Math.random() * 2 - 1) * GameConfig.spawnVariance;
+        }
+
+        // Spawn hearts based on distance
+        if (this.player.x >= this.nextHeartSpawn) {
+            const suitablePlatforms = this.platforms.platforms.filter(p =>
+                p.x > this.nextHeartSpawn - 100 &&
+                p.x < this.nextHeartSpawn + 100 &&
+                p.y < this.height - 50
+            );
+
+            if (suitablePlatforms.length > 0) {
+                const platform = suitablePlatforms[Math.floor(Math.random() * suitablePlatforms.length)];
+                this.hearts.push(new Heart(
+                    platform.x + Math.random() * Math.max(0, platform.width - 16),
+                    platform.y - 30
+                ));
+            }
+
+            // Schedule next heart spawn
+            this.nextHeartSpawn += GameConfig.heartSpawnDistance +
+                (Math.random() * 2 - 1) * GameConfig.spawnVariance;
+        }
+
+        // Update hearts
+        this.hearts.forEach(heart => heart.update(dt));
+
+        // Check heart collection
+        this.hearts = this.hearts.filter(heart => {
+            if (heart.collected) return false;
+
+            if (CollisionDetector.checkAABB(
+                { x: this.player.x, y: this.player.y, width: this.player.width, height: this.player.height },
+                { x: heart.x, y: heart.y, width: heart.width, height: heart.height }
+            )) {
+                if (this.player.health < this.player.maxHealth) {
+                    heart.collected = true;
+                    this.player.health++;
+                    this.audio.playSound('star'); // Reuse star sound for heart
+                    this.particles.emit(heart.x + 8, heart.y + 8, 10, '#FF0000');
+                    return false;
+                }
+            }
+
+            // Remove hearts far behind camera
+            if (heart.x < this.camera.x - 100) return false;
+
+            return true;
+        });
+
         // Update particles
         this.particles.update(dt);
 
         // Update distance
         this.distance = Math.floor(this.player.x / 10);
-
-        // Check for heart restoration every 100 points
-        if (this.score >= this.nextHeartScore) {
-            if (this.player.health < this.player.maxHealth) {
-                this.player.health++;
-                this.heartAnimation = {
-                    x: this.player.x + this.player.width / 2,
-                    y: this.player.y,
-                    time: 0
-                };
-                this.audio.playSound('star'); // Reuse star sound for heart
-            }
-            this.nextHeartScore += 100;
-        }
-
-        // Update heart animation
-        if (this.heartAnimation) {
-            this.heartAnimation.time += dt;
-            if (this.heartAnimation.time > 1.0) {
-                this.heartAnimation = null;
-            }
-        }
 
         // Update screen shake
         if (this.shakeTime > 0) {
@@ -397,46 +535,23 @@ class Game {
         // Draw stars
         this.stars.forEach(star => star.draw(this.ctx, this.camera));
 
+        // Draw magazines
+        this.magazines.forEach(mag => mag.draw(this.ctx, this.camera));
+
+        // Draw hearts
+        this.hearts.forEach(heart => heart.draw(this.ctx, this.camera));
+
         // Draw enemies
         this.enemies.draw(this.ctx, this.camera);
+
+        // Draw player bullets
+        this.playerBullets.forEach(bullet => bullet.draw(this.ctx, this.camera));
 
         // Draw player
         this.player.draw(this.ctx, this.camera);
 
         // Draw particles
         this.particles.draw(this.ctx);
-
-        // Draw heart animation
-        if (this.heartAnimation) {
-            const progress = this.heartAnimation.time / 1.0;
-            const screenX = this.heartAnimation.x - this.camera.x;
-            const screenY = this.heartAnimation.y - this.camera.y - (progress * 30); // Float upward
-            const alpha = 1 - progress;
-
-            this.ctx.save();
-            this.ctx.globalAlpha = alpha;
-
-            // Draw heart
-            this.ctx.fillStyle = '#FF0000';
-            this.ctx.fillRect(screenX - 4, screenY, 3, 2);
-            this.ctx.fillRect(screenX + 1, screenY, 3, 2);
-            this.ctx.fillRect(screenX - 4, screenY + 2, 8, 6);
-            this.ctx.fillRect(screenX - 3, screenY + 8, 6, 2);
-            this.ctx.fillRect(screenX - 2, screenY + 10, 4, 2);
-
-            // Highlight
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.fillRect(screenX - 3, screenY + 1, 1, 1);
-            this.ctx.fillRect(screenX + 2, screenY + 1, 1, 1);
-
-            // +1 text
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 10px "Courier New"';
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('+1', screenX, screenY - 5);
-
-            this.ctx.restore();
-        }
 
         this.ctx.restore();
 
@@ -515,7 +630,7 @@ class Game {
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '10px "Courier New"';
         this.ctx.fillText('WASD - Move & Jump', this.width / 2, 160);
-        this.ctx.fillText('. - Kick    / - Sword', this.width / 2, 175);
+        this.ctx.fillText('. - Kick    / - Shoot', this.width / 2, 175);
 
         // Flashing start text
         if (Math.floor(this.splashTime * 2) % 2 === 0) {
@@ -527,7 +642,7 @@ class Game {
         // Copyright
         this.ctx.fillStyle = '#888';
         this.ctx.font = '8px "Courier New"';
-        this.ctx.fillText('© 2026 Game Studio', this.width / 2, 230);
+        this.ctx.fillText('© 2026 RoiN', this.width / 2, 230);
     }
 
     drawGameOver() {
@@ -604,6 +719,11 @@ class Game {
         this.ctx.font = 'bold 12px "Courier New"';
         this.ctx.textAlign = 'left';
         this.ctx.fillText(`SCORE: ${this.score.toString().padStart(6, '0')}`, 5, 14);
+
+        // Ammo counter (before hearts)
+        this.ctx.textAlign = 'right';
+        this.ctx.fillStyle = '#FFA500';
+        this.ctx.fillText(`${this.player.ammo}/${this.player.maxAmmo}`, this.width - 60, 14);
 
         // Health hearts (more vibrant)
         this.ctx.textAlign = 'right';

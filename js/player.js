@@ -1,3 +1,48 @@
+// Player Bullet Class
+class PlayerBullet {
+    constructor(x, y, vx) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.width = 10;
+        this.height = 10;
+        this.dead = false;
+    }
+
+    update(dt) {
+        this.x += this.vx * dt;
+    }
+
+    draw(ctx, camera) {
+        const screenX = this.x - camera.x;
+        const screenY = this.y - camera.y;
+
+        // Draw yellow/orange bullet
+        ctx.fillStyle = '#FFA500';
+        ctx.fillRect(screenX + 1, screenY + 3, 8, 4);
+        ctx.fillRect(screenX + 2, screenY + 2, 6, 6);
+        ctx.fillRect(screenX + 3, screenY + 1, 4, 8);
+
+        // Bright core
+        ctx.fillStyle = '#FFFF00';
+        ctx.fillRect(screenX + 4, screenY + 4, 2, 2);
+
+        // Trail
+        ctx.fillStyle = 'rgba(255, 165, 0, 0.5)';
+        const trailDir = this.vx > 0 ? -1 : 1;
+        ctx.fillRect(screenX + trailDir * 3, screenY + 4, 3, 2);
+    }
+
+    getBounds() {
+        return {
+            x: this.x,
+            y: this.y,
+            width: this.width,
+            height: this.height
+        };
+    }
+}
+
 // Player Character - Ninja Fox
 class Player {
     constructor(x, y) {
@@ -40,10 +85,14 @@ class Player {
         // Ice physics
         this.onIce = false;
         this.slideVelocity = 0;
+
+        // Pistol ammo
+        this.ammo = 10;
+        this.maxAmmo = 20;
     }
 
     handleInput(input, dt) {
-        if (this.state === 'kicking' || this.state === 'stabbing' || this.state === 'hurt') {
+        if (this.state === 'kicking' || this.state === 'shooting' || this.state === 'hurt') {
             return; // Can't move during attacks or hurt state
         }
 
@@ -102,8 +151,10 @@ class Player {
         }
 
         if (input.isKeyPressed('.')) {
-            this.startStab();
-            return 'sword';
+            const bullet = this.startShoot();
+            if (bullet) {
+                return { type: 'shoot', bullet: bullet };
+            }
         }
 
         return null;
@@ -119,13 +170,24 @@ class Player {
         this.vx = this.facing * 50; // Forward momentum
     }
 
-    startStab() {
-        this.state = 'stabbing';
+    startShoot() {
+        if (this.ammo <= 0) {
+            return null; // No ammo
+        }
+
+        this.state = 'shooting';
         this.attacking = true;
-        this.attackType = 'stab';
-        this.attackTime = 0.2; // Faster, more reactive
+        this.attackType = 'shoot';
+        this.attackTime = 0.2; // Quick shoot animation
         this.stateTime = 0;
-        this.vx = 0;
+        this.ammo--;
+
+        // Create and return bullet
+        const bulletSpeed = 400;
+        const bulletX = this.x + (this.facing > 0 ? this.width : 0);
+        const bulletY = this.y + this.height * 0.4;
+
+        return new PlayerBullet(bulletX, bulletY, this.facing * bulletSpeed);
     }
 
     takeDamage() {
@@ -226,7 +288,7 @@ class Player {
         }
 
         // Update animation state
-        if (this.state !== 'kicking' && this.state !== 'stabbing' && this.state !== 'hurt') {
+        if (this.state !== 'kicking' && this.state !== 'shooting' && this.state !== 'hurt') {
             if (!this.grounded) {
                 this.state = this.vy < 0 ? 'jumping' : 'falling';
             } else if (Math.abs(this.vx) > 0) {
@@ -250,12 +312,34 @@ class Player {
                 height: this.height + 20
             };
         } else if (this.attackType === 'stab') {
-            // Vertical slash from up to down
+            // Semi-circle sword slash from hand
+            const progress = this.stateTime / this.attackTime;
+
+            // Hand position (roughly center-right of fox)
+            const handX = this.x + this.width * 0.7;
+            const handY = this.y + this.height * 0.4;
+
+            // Sword length
+            const swordLength = 20;
+
+            // Arc from top (-90°) to bottom (+90°) in front direction
+            const startAngle = -Math.PI / 2; // Top
+            const endAngle = Math.PI / 2;    // Bottom
+            const currentAngle = startAngle + (endAngle - startAngle) * progress;
+
+            // Adjust angle based on facing direction
+            const angle = this.facing > 0 ? currentAngle : Math.PI - currentAngle;
+
+            // Sword tip position
+            const swordTipX = handX + Math.cos(angle) * swordLength;
+            const swordTipY = handY + Math.sin(angle) * swordLength;
+
+            // Hitbox at sword tip (circular area)
             return {
-                x: this.facing > 0 ? this.x + this.width - 8 : this.x - 8,
-                y: this.y - 10,
+                x: swordTipX - 8,
+                y: swordTipY - 8,
                 width: 16,
-                height: this.height + 20
+                height: 16
             };
         }
         return null;
@@ -361,26 +445,32 @@ class Player {
             const trailY = 12 + Math.sin(trailAngle) * 12;
             ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
             ctx.fillRect(trailX - 2, trailY - 2, 4, 4);
-        } else if (this.state === 'stabbing') {
-            // Vertical sword slash from up to down
-            const slashProgress = this.stateTime / this.attackTime;
-            const slashY = -8 + slashProgress * 30; // Animates from top to bottom
+        } else if (this.state === 'shooting') {
+            // Draw pistol
+            const handX = 17; // Relative to player sprite
+            const handY = 10;
 
-            // Sword blade (vertical)
-            ctx.fillStyle = '#C0C0C0';
-            ctx.fillRect(20, slashY, 3, 20);
+            // Pistol body (dark gray)
+            ctx.fillStyle = '#444444';
+            ctx.fillRect(handX, handY, 8, 4);
 
-            // Blade highlight
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(20, slashY, 1, 18);
+            // Barrel
+            ctx.fillStyle = '#666666';
+            ctx.fillRect(handX + 8, handY + 1, 4, 2);
 
-            // Motion blur effect
-            ctx.fillStyle = 'rgba(192, 192, 192, 0.3)';
-            ctx.fillRect(21, slashY - 4, 2, 24);
-
-            // Handle at top
+            // Handle
             ctx.fillStyle = '#8B4513';
-            ctx.fillRect(19, slashY - 3, 5, 3);
+            ctx.fillRect(handX + 1, handY + 4, 3, 4);
+
+            // Muzzle flash if early in animation
+            if (this.stateTime < this.attackTime * 0.3) {
+                ctx.fillStyle = '#FFFF00';
+                ctx.fillRect(handX + 12, handY, 4, 4);
+                ctx.fillStyle = '#FFA500';
+                ctx.fillRect(handX + 13, handY + 1, 3, 2);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(handX + 14, handY + 1, 1, 2);
+            }
         }
     }
 }
