@@ -6,6 +6,7 @@ class MobileControls {
         this.buttonJump = null;
         this.buttonA = null;
         this.buttonB = null;
+        this.buttonPause = null;
         this.joystickActive = false;
         this.joystickAngle = 0;
         this.joystickDistance = 0;
@@ -45,7 +46,7 @@ class MobileControls {
         // Create Jump button (centered above A and B)
         this.buttonJump = document.createElement('div');
         this.buttonJump.id = 'button-jump';
-        this.buttonJump.innerHTML = '<span>JUMP</span>';
+        this.buttonJump.innerHTML = '<span>↑</span><span class="label">JUMP</span>';
         document.body.appendChild(this.buttonJump);
 
         // Create A button (Kick)
@@ -59,6 +60,12 @@ class MobileControls {
         this.buttonB.id = 'button-b';
         this.buttonB.innerHTML = '<span>B</span><span class="label">SHOOT</span>';
         document.body.appendChild(this.buttonB);
+
+        // Create Pause button (top center)
+        this.buttonPause = document.createElement('div');
+        this.buttonPause.id = 'button-pause';
+        this.buttonPause.innerHTML = '<span>⏸</span>';
+        document.body.appendChild(this.buttonPause);
 
         // Set up touch event listeners
         this.setupJoystickEvents();
@@ -169,6 +176,19 @@ class MobileControls {
             e.preventDefault();
             this.buttonB.classList.remove('pressed');
             window.dispatchEvent(new CustomEvent('mobileButtonB', { detail: { pressed: false } }));
+        }, { passive: false });
+
+        // Pause Button
+        this.buttonPause.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.buttonPause.classList.add('pressed');
+            window.dispatchEvent(new CustomEvent('mobileButtonPause', { detail: { pressed: true } }));
+        }, { passive: false });
+
+        this.buttonPause.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.buttonPause.classList.remove('pressed');
+            window.dispatchEvent(new CustomEvent('mobileButtonPause', { detail: { pressed: false } }));
         }, { passive: false });
     }
 

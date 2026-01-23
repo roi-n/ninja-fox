@@ -9,9 +9,11 @@ class InputHandler {
         this.buttonJumpPressed = false;
         this.buttonAPressed = false;
         this.buttonBPressed = false;
+        this.buttonPausePressed = false;
         this.buttonJumpWasPressed = false;
         this.buttonAWasPressed = false;
         this.buttonBWasPressed = false;
+        this.buttonPauseWasPressed = false;
 
         window.addEventListener('keydown', (e) => {
             this.keys[e.key.toLowerCase()] = true;
@@ -45,6 +47,13 @@ class InputHandler {
                 this.buttonBWasPressed = true;
             }
             this.buttonBPressed = e.detail.pressed;
+        });
+
+        window.addEventListener('mobileButtonPause', (e) => {
+            if (e.detail.pressed && !this.buttonPausePressed) {
+                this.buttonPauseWasPressed = true;
+            }
+            this.buttonPausePressed = e.detail.pressed;
         });
     }
 
@@ -96,9 +105,15 @@ class InputHandler {
                         return true;
                     }
                     break;
-                case '/': // Shoot
+                case '.': // Shoot
                     if (this.buttonBWasPressed) {
                         this.buttonBWasPressed = false;
+                        return true;
+                    }
+                    break;
+                case ' ': // Pause (space key)
+                    if (this.buttonPauseWasPressed) {
+                        this.buttonPauseWasPressed = false;
                         return true;
                     }
                     break;
@@ -113,5 +128,6 @@ class InputHandler {
         this.buttonJumpWasPressed = false;
         this.buttonAWasPressed = false;
         this.buttonBWasPressed = false;
+        this.buttonPauseWasPressed = false;
     }
 }

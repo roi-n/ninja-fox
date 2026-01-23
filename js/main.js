@@ -189,10 +189,22 @@ class Game {
         if (this.state === 'splash') {
             this.splashTime += dt;
 
-            // Check for space to start
-            if (this.input.isKeyPressed(' ')) {
-                this.startGame();
+            // Check for any key press or touch to start
+            for (let key in this.input.keyPressed) {
+                if (this.input.keyPressed[key]) {
+                    this.startGame();
+                    return;
+                }
             }
+
+            // Check mobile buttons
+            if (this.input.buttonJumpWasPressed ||
+                this.input.buttonAWasPressed ||
+                this.input.buttonBWasPressed) {
+                this.startGame();
+                return;
+            }
+
             return;
         }
 
