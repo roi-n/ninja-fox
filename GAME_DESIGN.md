@@ -82,7 +82,7 @@ ESC = Pause menu
 - Title logo: "NINJA FOX" in blocky 8-bit font
 - Pixelated ninja fox character art
 - Flashing "PRESS SPACE TO START" text (0.5s interval)
-- Copyright text: "© 2026 Game Studio"
+- Copyright text: "© 2026 RoiN"
 - Starfield background animation
 
 ### 8.2 HUD (In-Game)

@@ -720,10 +720,25 @@ class Game {
         this.ctx.textAlign = 'left';
         this.ctx.fillText(`SCORE: ${this.score.toString().padStart(6, '0')}`, 5, 14);
 
-        // Ammo counter (before hearts)
+        // Ammo counter with bullet icon (before hearts)
+        const ammoTextX = this.width - 60;
+        const bulletIconX = this.width - 58;
+        const ammoY = 6;
+
+        // Draw bullet icon
+        this.ctx.fillStyle = '#FFA500';
+        this.ctx.fillRect(bulletIconX, ammoY + 3, 8, 4);
+        this.ctx.fillRect(bulletIconX + 1, ammoY + 2, 6, 6);
+        this.ctx.fillRect(bulletIconX + 2, ammoY + 1, 4, 8);
+
+        // Bright core
+        this.ctx.fillStyle = '#FFFF00';
+        this.ctx.fillRect(bulletIconX + 3, ammoY + 4, 2, 2);
+
+        // Ammo text
         this.ctx.textAlign = 'right';
         this.ctx.fillStyle = '#FFA500';
-        this.ctx.fillText(`${this.player.ammo}/${this.player.maxAmmo}`, this.width - 60, 14);
+        this.ctx.fillText(`${this.player.ammo}/${this.player.maxAmmo}`, ammoTextX, 14);
 
         // Health hearts (more vibrant)
         this.ctx.textAlign = 'right';
