@@ -89,6 +89,12 @@ class Player {
         // Pistol ammo
         this.ammo = 10;
         this.maxAmmo = 20;
+
+        // Current stage (for stage-specific physics)
+        this.currentStage = 1;
+
+        // Platform tracking for moving platforms
+        this.standingPlatform = null;
     }
 
     handleInput(input, dt) {
@@ -110,7 +116,11 @@ class Player {
         // Apply ice physics if on ice
         if (this.onIce && this.grounded) {
             // Slide on ice - slower acceleration/deceleration
-            const acceleration = 400 * dt; // Lower acceleration on ice
+            // Get slipperier in later stages
+            const iceConfig = typeof GameConfig !== 'undefined' ? GameConfig : { iceBaseAcceleration: 400, iceAccelerationDecay: 0.9 };
+            const stageFactor = Math.pow(iceConfig.iceAccelerationDecay, Math.max(0, this.currentStage - 1));
+            const acceleration = iceConfig.iceBaseAcceleration * stageFactor * dt;
+
             if (Math.abs(targetVx - this.vx) < acceleration) {
                 this.vx = targetVx;
             } else {
@@ -204,7 +214,10 @@ class Player {
         return true;
     }
 
-    update(dt, platforms) {
+    update(dt, platforms, currentStage = 1) {
+        // Store current stage for physics calculations
+        this.currentStage = currentStage;
+
         // Update timers
         if (this.jumpBufferCounter > 0) {
             this.jumpBufferCounter -= dt;
@@ -256,6 +269,10 @@ class Player {
         this.grounded = false;
         this.onIce = false; // Reset ice flag
 
+        // Store previous standing platform
+        const previousPlatform = this.standingPlatform;
+        this.standingPlatform = null; // Reset standing platform
+
         // Platform collision
         const nearbyPlatforms = platforms.getPlatformsInRange(
             this.x - 20, this.y - 20,
@@ -268,16 +285,30 @@ class Player {
                     this.y = platform.y - this.height;
                     this.vy = 0;
                     this.grounded = true;
-                    this.onIce = true; // One-way platforms are ice!
+                    this.standingPlatform = platform;
+                    // One-way platforms are ice, or all platforms are ice in stage 3+
+                    this.onIce = true;
                 }
             } else if (platform.type === 'solid') {
                 if (CollisionDetector.checkSolidCollision(this, platform)) {
                     const side = CollisionDetector.resolveCollision(this, platform);
                     if (side === 'top') {
                         this.grounded = true;
+                        this.standingPlatform = platform;
+                        // Stage 3+ has icy platforms (more slippery)
+                        if (currentStage >= 3) {
+                            this.onIce = true;
+                        }
                     }
                 }
             }
+        }
+
+        // Move with platform if standing on a moving platform
+        if (this.grounded && this.standingPlatform && this.standingPlatform.isMoving) {
+            // Apply the platform's movement to the player
+            const platformMovement = this.standingPlatform.x - this.standingPlatform.lastX;
+            this.x += platformMovement;
         }
 
         // Update coyote time

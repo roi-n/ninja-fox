@@ -19,9 +19,13 @@ class Game {
         this.ctx.imageSmoothingEnabled = false;
 
         // Game state
-        this.state = 'splash'; // splash, playing, gameover, paused
+        this.state = 'splash'; // splash, playing, gameover, paused, victory
         this.score = 0;
         this.distance = 0;
+
+        // Stages system
+        this.currentStage = 1;
+        this.stageNotification = null; // {stage, time}
 
         // Systems
         this.input = new InputHandler();
@@ -38,10 +42,17 @@ class Game {
         this.playerBullets = [];
         this.magazines = [];
         this.hearts = [];
+        this.fires = [];
+        this.portal = null;
 
         // Spawn tracking
         this.nextMagazineSpawn = 0;
         this.nextHeartSpawn = 0;
+        this.nextFireSpawn = 0;
+        this.nextMovingPlatformSpawn = 0;
+
+        // Difficulty
+        this.difficultyLevel = 0;
 
         // Camera
         this.camera = {
@@ -117,6 +128,11 @@ class Game {
         this.score = 0;
         this.distance = 0;
 
+        // Reset stages
+        this.currentStage = 1;
+        this.stageNotification = { stage: 1, time: 3.0 };
+        console.log('Game started. Stages mode:', GameConfig.stagesMode, 'Stage distance:', GameConfig.stageDistance);
+
         // Reset input state to prevent stuck keys
         this.input.reset();
 
@@ -128,6 +144,8 @@ class Game {
         this.playerBullets = [];
         this.magazines = [];
         this.hearts = [];
+        this.fires = [];
+        this.portal = null;
 
         // Initialize spawn distances with variance
         this.nextMagazineSpawn = GameConfig.magazineSpawnDistance +
@@ -214,7 +232,7 @@ class Game {
             return;
         }
 
-        if (this.state === 'gameover') {
+        if (this.state === 'gameover' || this.state === 'victory') {
             // Check for space to retry - use key down instead of key pressed
             if (this.input.isKeyDown(' ') || this.input.wasMobileKeyPressed()) {
                 console.log("restarting!!")
@@ -252,7 +270,7 @@ class Game {
             }
         }
 
-        const landed = this.player.update(dt, this.platforms);
+        const landed = this.player.update(dt, this.platforms, this.currentStage);
         if (landed) {
             this.audio.playSound('land');
         }
@@ -268,10 +286,10 @@ class Game {
         this.camera.x += (this.camera.targetX - this.camera.x) * this.camera.smoothing;
 
         // Update platforms
-        this.platforms.update(this.camera.x, this.width);
+        this.platforms.update(this.camera.x, this.width, this.currentStage, dt);
 
         // Update enemies
-        this.enemies.update(dt, this.player.x, this.width);
+        this.enemies.update(dt, this.player.x, this.width, this.distance, this.currentStage);
 
         // Check enemy collisions
         const collision = this.enemies.checkPlayerCollisions(this.player);
@@ -312,6 +330,31 @@ class Game {
                     '#00FF00'
                 );
             } else if (bulletCollision.type === 'player_hit_by_bullet') {
+                if (this.player.takeDamage()) {
+                    this.audio.playSound('damage');
+                    this.screenShake(3, 0.15);
+
+                    if (this.player.health <= 0) {
+                        this.gameOver();
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Check poop collisions
+        const poopCollision = this.enemies.checkPoopCollisions(this.player);
+        if (poopCollision) {
+            if (poopCollision.type === 'poop_destroyed') {
+                this.audio.playSound('enemy');
+                this.score += 2; // Small bonus for destroying poop
+                this.particles.emit(
+                    this.player.x + this.player.width / 2,
+                    this.player.y + this.player.height / 2,
+                    6,
+                    '#8B4513'
+                );
+            } else if (poopCollision.type === 'player_hit_by_poop') {
                 if (this.player.takeDamage()) {
                     this.audio.playSound('damage');
                     this.screenShake(3, 0.15);
@@ -486,11 +529,125 @@ class Game {
             return true;
         });
 
+        // Spawn fires based on stage or distance
+        const shouldSpawnFire = GameConfig.stagesMode ? this.currentStage >= 5 : this.distance >= (GameConfig.fireDistance || 1500);
+
+        if (shouldSpawnFire && this.player.x >= this.nextFireSpawn) {
+            const suitablePlatforms = this.platforms.platforms.filter(p =>
+                p.x > this.nextFireSpawn - 100 &&
+                p.x < this.nextFireSpawn + 100 &&
+                p.y < this.height - 50 &&
+                !p.isMoving // Don't spawn fire on moving platforms
+            );
+
+            if (suitablePlatforms.length > 0) {
+                const platform = suitablePlatforms[Math.floor(Math.random() * suitablePlatforms.length)];
+                const fireWidth = 32 + Math.floor(Math.random() * 32); // 32-64 pixels wide
+                const fireX = platform.x + Math.random() * Math.max(0, platform.width - fireWidth);
+                this.fires.push(new Fire(fireX, platform.y - 16, fireWidth));
+            }
+
+            // Schedule next fire spawn
+            this.nextFireSpawn += 300 + Math.random() * 200; // Every 300-500 pixels
+        }
+
+        // Update fires
+        this.fires.forEach(fire => fire.update(dt));
+
+        // Check fire collisions
+        this.fires = this.fires.filter(fire => {
+            if (fire.dead) return false;
+
+            // Check collision with player
+            if (CollisionDetector.checkAABB(
+                { x: this.player.x, y: this.player.y, width: this.player.width, height: this.player.height },
+                fire.getBounds()
+            )) {
+                if (this.player.takeDamage()) {
+                    this.audio.playSound('damage');
+                    this.screenShake(4, 0.2);
+                    this.particles.emit(
+                        this.player.x + this.player.width / 2,
+                        this.player.y + this.player.height / 2,
+                        10,
+                        '#FF4500'
+                    );
+
+                    if (this.player.health <= 0) {
+                        this.gameOver();
+                        return false;
+                    }
+                }
+            }
+
+            // Remove fires far behind camera
+            if (fire.x < this.camera.x - 100) return false;
+
+            return true;
+        });
+
         // Update particles
         this.particles.update(dt);
 
         // Update distance
         this.distance = Math.floor(this.player.x / 10);
+
+        // Update difficulty level
+        if (GameConfig.stagesMode) {
+            // In stages mode, difficulty is based on current stage
+            this.difficultyLevel = this.currentStage - 1;
+        } else {
+            // In continuous mode, difficulty increases every interval
+            this.difficultyLevel = Math.floor(this.distance / GameConfig.difficultyInterval);
+        }
+
+        // Stage progression (stages mode only)
+        if (GameConfig.stagesMode) {
+            const newStage = Math.min(
+                Math.floor(this.distance / GameConfig.stageDistance) + 1,
+                GameConfig.totalStages
+            );
+
+            if (newStage > this.currentStage) {
+                this.currentStage = newStage;
+                this.stageNotification = { stage: newStage, time: 1.0 };
+                console.log(`Stage ${newStage} reached! Distance: ${this.distance}m`);
+            }
+
+            // Update stage notification
+            if (this.stageNotification && this.stageNotification.time > 0) {
+                this.stageNotification.time -= dt;
+            }
+
+            // Spawn portal after completing final stage
+            if (!this.portal && this.currentStage >= GameConfig.totalStages) {
+                const portalDistance = GameConfig.totalStages * GameConfig.stageDistance * 10 + 200;
+                const suitablePlatforms = this.platforms.platforms.filter(p =>
+                    p.x > portalDistance - 50 &&
+                    p.x < portalDistance + 50 &&
+                    p.y < this.height - 100
+                );
+
+                if (suitablePlatforms.length > 0) {
+                    const platform = suitablePlatforms[0];
+                    this.portal = new Portal(platform.x + platform.width / 2 - 24, platform.y - 64);
+                }
+            }
+
+            // Check portal activation
+            if (this.portal && !this.portal.activated) {
+                this.portal.update(dt);
+
+                if (CollisionDetector.checkAABB(
+                    { x: this.player.x, y: this.player.y, width: this.player.width, height: this.player.height },
+                    this.portal.getBounds()
+                )) {
+                    this.portal.activated = true;
+                    this.victory();
+                    return;
+                }
+            }
+        }
 
         // Update screen shake
         if (this.shakeTime > 0) {
@@ -506,6 +663,11 @@ class Game {
     gameOver() {
         this.state = 'gameover';
         this.audio.playSound('death');
+    }
+
+    victory() {
+        this.state = 'victory';
+        this.audio.playSound('star'); // Reuse star sound for victory
     }
 
     draw() {
@@ -524,6 +686,11 @@ class Game {
 
         if (this.state === 'gameover') {
             this.drawGameOver();
+            return;
+        }
+
+        if (this.state === 'victory') {
+            this.drawVictory();
             return;
         }
 
@@ -567,6 +734,11 @@ class Game {
         // Draw player bullets
         this.playerBullets.forEach(bullet => bullet.draw(this.ctx, this.camera));
 
+        // Draw portal (if exists)
+        if (this.portal) {
+            this.portal.draw(this.ctx, this.camera);
+        }
+
         // Draw player
         this.player.draw(this.ctx, this.camera);
 
@@ -577,6 +749,11 @@ class Game {
 
         // Draw HUD
         this.drawHUD();
+
+        // Draw stage notification
+        if (this.stageNotification && this.stageNotification.time > 0) {
+            this.drawStageNotification();
+        }
 
         // Draw pause overlay if paused
         if (this.state === 'paused') {
@@ -688,6 +865,66 @@ class Game {
         this.ctx.fillText('PRESS SPACE TO RETRY', this.width / 2, this.height / 2 + 70);
     }
 
+    drawVictory() {
+        // Celebratory gradient overlay
+        const gradient = this.ctx.createLinearGradient(0, 0, 0, this.height);
+        gradient.addColorStop(0, 'rgba(255, 215, 0, 0.8)');
+        gradient.addColorStop(0.5, 'rgba(138, 43, 226, 0.8)');
+        gradient.addColorStop(1, 'rgba(0, 255, 255, 0.8)');
+        this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0, 0, this.width, this.height);
+
+        // Victory text with glow
+        this.ctx.save();
+        this.ctx.shadowColor = '#FFD700';
+        this.ctx.shadowBlur = 20;
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = 'bold 36px "Courier New"';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('VICTORY!', this.width / 2, this.height / 2 - 40);
+        this.ctx.restore();
+
+        // Stage completion
+        this.ctx.fillStyle = '#00FFFF';
+        this.ctx.font = 'bold 18px "Courier New"';
+        this.ctx.fillText(`ALL ${GameConfig.totalStages} STAGES COMPLETE!`, this.width / 2, this.height / 2);
+
+        // Score
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 16px "Courier New"';
+        this.ctx.fillText(`FINAL SCORE: ${this.score.toString().padStart(6, '0')}`, this.width / 2, this.height / 2 + 30);
+        this.ctx.fillText(`DISTANCE: ${this.distance}m`, this.width / 2, this.height / 2 + 50);
+
+        // Retry text
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = '12px "Courier New"';
+        this.ctx.fillText('PRESS SPACE TO PLAY AGAIN', this.width / 2, this.height / 2 + 80);
+    }
+
+    drawStageNotification() {
+        const alpha = Math.min(1, this.stageNotification.time);
+
+        this.ctx.save();
+        this.ctx.globalAlpha = alpha;
+
+        // Background bar
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        this.ctx.fillRect(this.width / 2 - 100, 30, 200, 50);
+
+        // // Border
+        // this.ctx.strokeStyle = '#00FFFF';
+        // this.ctx.lineWidth = 3;
+        // this.ctx.strokeRect(this.width / 2 - 100, 30, 200, 50);
+
+        // Stage text
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 24px "Courier New"';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(`STAGE ${this.stageNotification.stage}`, this.width / 2, 63);
+
+        this.ctx.restore();
+    }
+
     drawPauseOverlay() {
         // Semi-transparent blur effect (simulated with checkerboard pattern)
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -795,6 +1032,16 @@ class Game {
         this.ctx.textAlign = 'left';
         this.ctx.fillStyle = '#00FF00';
         this.ctx.fillText(`${this.distance}m`, 5, this.height - 5);
+
+        // Stage indicator (if stages mode enabled)
+        if (GameConfig.stagesMode) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.fillRect(this.width / 2 - 40, 0, 80, 20);
+            this.ctx.textAlign = 'center';
+            this.ctx.fillStyle = '#FF00FF';
+            this.ctx.font = 'bold 12px "Courier New"';
+            this.ctx.fillText(`STAGE ${this.currentStage}/${GameConfig.totalStages}`, this.width / 2, 14);
+        }
     }
 
     gameLoop(currentTime) {

@@ -21,5 +21,10 @@ const GameConfig = {
     iceAccelerationDecay: 0.9,   // Multiply by this per difficulty level (gets slipperier)
 
     // Debug settings
-    debugMobileControlsOnPC: true, // Show mobile controls on PC for debugging
+    debugMobileControlsOnPC: false, // Show mobile controls on PC for debugging
+
+    // Stages mode
+    stagesMode: true,               // Enable stages progression (false = continuous difficulty)
+    stageDistance: 100,             // Distance in meters for each stage (adjustable for testing)
+    totalStages: 5,                 // Total number of stages before victory
 };

@@ -1,33 +1,51 @@
 // Platform Generation System
 class Platform {
-    constructor(x, y, width, height, type = 'solid') {
+    constructor(x, y, width, height, type = 'solid', stage = 1) {
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
         this.type = type; // 'solid' or 'oneway'
+        this.stage = stage;
+        this.isMoving = false;
+        this.lastX = x; // Track position for moving platform logic
+    }
+
+    update(dt) {
+        // Base platforms don't move
+        this.lastX = this.x;
     }
 
     draw(ctx, camera) {
         const screenX = this.x - camera.x;
         const screenY = this.y - camera.y;
 
+        // Stage-specific color palettes
+        const stageColors = {
+            1: { base: '#D2691E', highlight: '#FFB366', shadow: '#8B4513', stroke: '#A0522D' },
+            2: { base: '#8B008B', highlight: '#DA70D6', shadow: '#4B0082', stroke: '#9370DB' }, // Purple
+            3: { base: '#00CED1', highlight: '#AFEEEE', shadow: '#008B8B', stroke: '#48D1CC' }, // Cyan/Ice
+            4: { base: '#228B22', highlight: '#90EE90', shadow: '#006400', stroke: '#32CD32' }, // Green
+            5: { base: '#B22222', highlight: '#FF6347', shadow: '#8B0000', stroke: '#DC143C' }  // Red/Fire
+        };
+
+        const colors = stageColors[this.stage] || stageColors[1];
+
         if (this.type === 'solid') {
-            // Draw solid platform with vibrant Atari-style colors
-            // Base color - bright tan/orange
-            ctx.fillStyle = '#D2691E';
+            // Draw solid platform with stage-specific colors
+            ctx.fillStyle = colors.base;
             ctx.fillRect(screenX, screenY, this.width, this.height);
 
             // Top highlight
-            ctx.fillStyle = '#FFB366';
+            ctx.fillStyle = colors.highlight;
             ctx.fillRect(screenX, screenY, this.width, 2);
 
             // Shadow on bottom
-            ctx.fillStyle = '#8B4513';
+            ctx.fillStyle = colors.shadow;
             ctx.fillRect(screenX, screenY + this.height - 2, this.width, 2);
 
             // Brick pattern with alternating colors
-            ctx.strokeStyle = '#A0522D';
+            ctx.strokeStyle = colors.stroke;
             ctx.lineWidth = 1;
             const brickWidth = 16;
             const brickHeight = 8;
@@ -36,29 +54,93 @@ class Platform {
                     ctx.strokeRect(screenX + bx, screenY + by, brickWidth, brickHeight);
                     // Add dots for texture
                     if ((bx + by) % 32 === 0) {
-                        ctx.fillStyle = '#A0522D';
+                        ctx.fillStyle = colors.stroke;
                         ctx.fillRect(screenX + bx + 4, screenY + by + 3, 2, 2);
                     }
                 }
             }
         } else {
-            // Draw one-way platform (vibrant cyan/blue Atari style)
-            ctx.fillStyle = '#00BFFF';
+            // Draw one-way platform with stage-specific colors (lighter versions)
+            const onewayColors = {
+                1: '#00BFFF',
+                2: '#DDA0DD', // Plum
+                3: '#E0FFFF', // Light cyan (icy)
+                4: '#98FB98', // Pale green
+                5: '#FA8072'  // Salmon (fire theme)
+            };
+
+            ctx.fillStyle = onewayColors[this.stage] || onewayColors[1];
             ctx.fillRect(screenX, screenY, this.width, this.height);
 
             // Top bright highlight
-            ctx.fillStyle = '#87CEEB';
+            ctx.fillStyle = colors.highlight;
             ctx.fillRect(screenX, screenY, this.width, 2);
 
             // Bottom shadow
-            ctx.fillStyle = '#1E90FF';
+            ctx.fillStyle = colors.shadow;
             ctx.fillRect(screenX, screenY + this.height - 2, this.width, 2);
 
             // Decorative pattern
             for (let i = 0; i < this.width; i += 8) {
-                ctx.fillStyle = '#4169E1';
+                ctx.fillStyle = colors.stroke;
                 ctx.fillRect(screenX + i, screenY + 2, 2, this.height - 4);
             }
+        }
+    }
+}
+
+class MovingPlatform extends Platform {
+    constructor(x, y, width, height, leftBound, rightBound, stage = 1) {
+        super(x, y, width, height, 'solid', stage);
+        this.isMoving = true;
+        this.startX = x;
+        this.leftBound = leftBound;
+        this.rightBound = rightBound;
+        this.speed = 40; // Pixels per second
+        this.direction = 1; // 1 for right, -1 for left
+        this.velocityX = 0; // Current velocity
+        this.lastX = x; // Track last position
+    }
+
+    update(dt) {
+        // Store last position
+        this.lastX = this.x;
+
+        // Move platform
+        const movement = this.speed * this.direction * dt;
+        this.x += movement;
+        this.velocityX = movement / dt; // Store velocity for this frame
+
+        // Reverse direction at bounds
+        if (this.x <= this.leftBound) {
+            this.x = this.leftBound;
+            this.direction = 1;
+            this.velocityX = 0; // Stop at bounds
+        } else if (this.x + this.width >= this.rightBound) {
+            this.x = this.rightBound - this.width;
+            this.direction = -1;
+            this.velocityX = 0; // Stop at bounds
+        }
+    }
+
+    draw(ctx, camera) {
+        // Call parent draw method
+        super.draw(ctx, camera);
+
+        // Add visual indicator that it's moving (arrows or glow)
+        const screenX = this.x - camera.x;
+        const screenY = this.y - camera.y;
+
+        // Draw arrows to show movement direction
+        ctx.fillStyle = '#FFFF00';
+        if (this.direction > 0) {
+            // Right arrow
+            ctx.fillRect(screenX + this.width - 8, screenY + this.height / 2 - 2, 6, 4);
+            ctx.fillRect(screenX + this.width - 6, screenY + this.height / 2 - 3, 2, 6);
+        } else {
+            // Left arrow
+            ctx.fillRect(screenX + 2, screenY + this.height / 2 - 2, 6, 4);
+            ctx.fillRect(screenX + 2, screenY + this.height / 2 - 3, 2, 6);
         }
     }
 }
@@ -70,15 +152,16 @@ class PlatformGenerator {
         this.gameHeight = gameHeight;
         this.tileSize = 16;
         this.lastPlatformX = 0;
+        this.currentStage = 1;
 
         // Create ground level
-        this.platforms.push(new Platform(0, gameHeight - 32, gameWidth * 3, 32, 'solid'));
+        this.platforms.push(new Platform(0, gameHeight - 32, gameWidth * 3, 32, 'solid', 1));
 
         // Generate initial platforms
-        this.generatePlatforms(0, gameWidth * 2);
+        this.generatePlatforms(0, gameWidth * 2, 1);
     }
 
-    generatePlatforms(startX, endX) {
+    generatePlatforms(startX, endX, currentStage = 1) {
         let currentX = Math.max(startX, this.lastPlatformX);
 
         // Get the last platform to ensure reachability
@@ -107,11 +190,22 @@ class PlatformGenerator {
 
             const y = minY + Math.random() * (maxY - minY);
 
-            // 70% one-way, 30% solid
-            const type = Math.random() > 0.3 ? 'oneway' : 'solid';
-            const height = type === 'solid' ? 16 : 8;
+            // Stage 4+: 30% chance of moving platform, otherwise normal
+            // Stage 1-3: Normal platforms (70% one-way, 30% solid)
+            let newPlatform;
+            if (currentStage >= 4 && Math.random() < 0.3) {
+                // Create moving platform
+                const moveDistance = 80 + Math.random() * 80; // Move 80-160 pixels
+                const leftBound = currentX;
+                const rightBound = currentX + moveDistance;
+                newPlatform = new MovingPlatform(currentX, y, width, 16, leftBound, rightBound, currentStage);
+            } else {
+                // Create normal platform
+                const type = Math.random() > 0.3 ? 'oneway' : 'solid';
+                const height = type === 'solid' ? 16 : 8;
+                newPlatform = new Platform(currentX, y, width, height, type, currentStage);
+            }
 
-            const newPlatform = new Platform(currentX, y, width, height, type);
             this.platforms.push(newPlatform);
 
             // Update for next iteration
@@ -122,14 +216,24 @@ class PlatformGenerator {
         this.lastPlatformX = currentX;
     }
 
-    update(cameraX, gameWidth) {
+    update(cameraX, gameWidth, currentStage = 1, dt = 0) {
+        // Update current stage
+        this.currentStage = currentStage;
+
+        // Update all moving platforms
+        this.platforms.forEach(platform => {
+            if (platform.isMoving && dt > 0) {
+                platform.update(dt);
+            }
+        });
+
         // Remove platforms far behind camera
         this.platforms = this.platforms.filter(p => p.x + p.width > cameraX - 100);
 
         // Generate new platforms ahead
         const rightEdge = cameraX + gameWidth + 200;
         if (this.lastPlatformX < rightEdge) {
-            this.generatePlatforms(this.lastPlatformX, rightEdge + 400);
+            this.generatePlatforms(this.lastPlatformX, rightEdge + 400, currentStage);
         }
     }
 
@@ -304,3 +408,144 @@ class Heart {
         ctx.fillRect(screenX + 6, screenY + 6, 1, 1);
     }
 }
+
+class Fire {
+    constructor(x, y, width) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = 16;
+        this.animTime = 0;
+        this.dead = false;
+    }
+
+    update(dt) {
+        this.animTime += dt * 8;
+    }
+
+    draw(ctx, camera) {
+        const screenX = this.x - camera.x;
+        const screenY = this.y - camera.y;
+
+        // Animated fire effect
+        const flameFrame = Math.floor(this.animTime) % 3;
+
+        // Base fire (red/orange)
+        ctx.fillStyle = '#FF4500';
+        for (let i = 0; i < this.width; i += 4) {
+            const flameHeight = 8 + Math.sin(this.animTime * 2 + i * 0.5) * 4;
+            ctx.fillRect(screenX + i, screenY + this.height - flameHeight, 4, flameHeight);
+        }
+
+        // Bright flames (yellow)
+        ctx.fillStyle = '#FFD700';
+        for (let i = 2; i < this.width; i += 8) {
+            const flameHeight = 6 + Math.sin(this.animTime * 3 + i * 0.3) * 3;
+            ctx.fillRect(screenX + i, screenY + this.height - flameHeight, 3, flameHeight - 2);
+        }
+
+        // Hot core (white)
+        ctx.fillStyle = '#FFFFFF';
+        for (let i = 4; i < this.width; i += 12) {
+            const coreHeight = 3 + Math.sin(this.animTime * 4 + i * 0.2) * 2;
+            ctx.fillRect(screenX + i, screenY + this.height - coreHeight, 2, coreHeight - 1);
+        }
+
+        // Embers/particles above fire
+        ctx.fillStyle = flameFrame === 0 ? '#FF6347' : '#FFA500';
+        for (let i = 0; i < this.width / 8; i++) {
+            const px = screenX + (i * 8) + Math.sin(this.animTime + i) * 3;
+            const py = screenY - 2 - (this.animTime % 1) * 8;
+            ctx.fillRect(px, py, 2, 2);
+        }
+    }
+
+    getBounds() {
+        return {
+            x: this.x,
+            y: this.y,
+            width: this.width,
+            height: this.height
+        };
+    }
+}
+
+class Portal {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 48;
+        this.height = 64;
+        this.animTime = 0;
+        this.activated = false;
+    }
+
+    update(dt) {
+        this.animTime += dt * 4;
+    }
+
+    draw(ctx, camera) {
+        const screenX = this.x - camera.x;
+        const screenY = this.y - camera.y;
+
+        // Animated portal with swirling effect
+        const pulse = Math.sin(this.animTime) * 0.3 + 0.7;
+
+        // Outer ring (purple)
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = "#8800FF";
+        ctx.fillRect(screenX + 4, screenY, 40, 64);
+        ctx.fillRect(screenX, screenY + 8, 48, 48);
+
+        // Inner ring (cyan)
+        ctx.fillStyle = "#00FFFF";
+        ctx.fillRect(screenX + 8, screenY + 4, 32, 56);
+        ctx.fillRect(screenX + 4, screenY + 12, 40, 40);
+
+        // Swirling center (animated)
+        const swirl = Math.floor(this.animTime * 2) % 4;
+        ctx.fillStyle = "#FFFFFF";
+
+        if (swirl === 0) {
+            ctx.fillRect(screenX + 16, screenY + 20, 16, 24);
+            ctx.fillRect(screenX + 12, screenY + 24, 8, 16);
+        } else if (swirl === 1) {
+            ctx.fillRect(screenX + 20, screenY + 16, 8, 32);
+            ctx.fillRect(screenX + 16, screenY + 20, 16, 24);
+        } else if (swirl === 2) {
+            ctx.fillRect(screenX + 16, screenY + 20, 16, 24);
+            ctx.fillRect(screenX + 28, screenY + 24, 8, 16);
+        } else {
+            ctx.fillRect(screenX + 12, screenY + 20, 24, 24);
+            ctx.fillRect(screenX + 20, screenY + 16, 8, 8);
+        }
+
+        // Bright core
+        ctx.fillStyle = "#FFFF00";
+        ctx.fillRect(screenX + 20, screenY + 28, 8, 8);
+
+        ctx.restore();
+
+        // Particles around portal
+        for (let i = 0; i < 8; i++) {
+            const angle = (this.animTime + i * Math.PI / 4) * 2;
+            const distance = 30 + Math.sin(this.animTime * 2 + i) * 5;
+            const px = screenX + 24 + Math.cos(angle) * distance;
+            const py = screenY + 32 + Math.sin(angle) * distance;
+
+            ctx.fillStyle = i % 2 === 0 ? "#FF00FF" : "#00FFFF";
+            ctx.fillRect(px, py, 3, 3);
+        }
+    }
+
+    getBounds() {
+        return {
+            x: this.x,
+            y: this.y,
+            width: this.width,
+            height: this.height
+        };
+    }
+}
+
