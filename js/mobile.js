@@ -17,10 +17,12 @@ class MobileControls {
     }
 
     detectMobile() {
-        // Check if device is mobile/tablet
-        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        // Check if device is mobile/tablet OR debug mode is enabled
+        const isActualMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                ('ontouchstart' in window) ||
                (navigator.maxTouchPoints > 0);
+
+        return isActualMobile || (typeof GameConfig !== 'undefined' && GameConfig.debugMobileControlsOnPC);
     }
 
     createControls() {

@@ -4,8 +4,8 @@ class Game {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
 
-        // Game dimensions
-        this.width = 320;
+        // Game dimensions (wider for landscape mobile)
+        this.width = 480;
         this.height = 240;
         this.scale = 2;
 
@@ -90,11 +90,19 @@ class Game {
         const gameAspect = this.width / this.height;
         const windowAspect = windowWidth / windowHeight;
 
+        // Check if mobile (use fractional scaling for better fit)
+        const isMobile = this.mobileControls && this.mobileControls.isVisible();
+
         let scale;
         if (windowAspect > gameAspect) {
-            scale = Math.floor(windowHeight / this.height);
+            scale = windowHeight / this.height;
         } else {
-            scale = Math.floor(windowWidth / this.width);
+            scale = windowWidth / this.width;
+        }
+
+        // Use fractional scaling on mobile, integer on desktop
+        if (!isMobile) {
+            scale = Math.floor(scale);
         }
 
         scale = Math.max(1, Math.min(scale, 4)); // Clamp between 1-4x

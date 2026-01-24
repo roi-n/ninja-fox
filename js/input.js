@@ -20,11 +20,17 @@ class InputHandler {
             if (!this.keyPressed[e.key.toLowerCase()]) {
                 this.keyPressed[e.key.toLowerCase()] = true;
             }
+
+            // Visual feedback for keyboard presses on mobile controls
+            this.updateVisualFeedback(e.key.toLowerCase(), true);
         });
 
         window.addEventListener('keyup', (e) => {
             this.keys[e.key.toLowerCase()] = false;
             this.keyPressed[e.key.toLowerCase()] = false;
+
+            // Remove visual feedback
+            this.updateVisualFeedback(e.key.toLowerCase(), false);
         });
 
         // Listen for mobile button events
@@ -125,6 +131,42 @@ class InputHandler {
         }
 
         return false;
+    }
+
+    updateVisualFeedback(key, pressed) {
+        // Map keyboard keys to mobile buttons and add/remove pressed class
+        const buttonMap = {
+            'a': 'joystick-stick', // Left
+            'd': 'joystick-stick', // Right
+            'w': 'button-jump',
+            ',': 'button-a',
+            '.': 'button-b',
+            ' ': 'button-pause'
+        };
+
+        const buttonId = buttonMap[key];
+        if (buttonId) {
+            const button = document.getElementById(buttonId);
+            if (button) {
+                if (pressed) {
+                    button.classList.add('pressed');
+                    // For joystick, also move the stick
+                    if (buttonId === 'joystick-stick') {
+                        if (key === 'a') {
+                            button.style.transform = 'translate(calc(-50% - 30px), -50%)';
+                        } else if (key === 'd') {
+                            button.style.transform = 'translate(calc(-50% + 30px), -50%)';
+                        }
+                    }
+                } else {
+                    button.classList.remove('pressed');
+                    // Reset joystick position
+                    if (buttonId === 'joystick-stick') {
+                        button.style.transform = 'translate(-50%, -50%)';
+                    }
+                }
+            }
+        }
     }
 
     reset() {

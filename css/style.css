@@ -12,6 +12,13 @@ body {
     min-height: 100vh;
     font-family: 'Courier New', monospace;
     overflow: hidden;
+    margin: 0;
+    padding: 0;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 #game-container {
@@ -29,15 +36,51 @@ body {
     image-rendering: crisp-edges;
     border: 4px solid #333;
     box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+    max-width: 70vw;
+    max-height: 100vh;
+}
+
+/* Optimize for mobile landscape mode */
+@media (max-height: 500px) and (orientation: landscape) {
+    #gameCanvas {
+        border-width: 1px;
+    }
+
+    #joystick-container {
+        width: 70px;
+        height: 70px;
+        bottom: 8px;
+        left: 8px;
+    }
+
+    #joystick-stick {
+        width: 35px;
+        height: 35px;
+    }
+
+
+    #button-pause {
+        width: 35px;
+        height: 35px;
+        top: 5px;
+        right: 5px;
+        font-size: 18px;
+    }
+
+    #button-a .label,
+    #button-b .label,
+    #button-jump .label {
+        font-size: 7px;
+    }
 }
 
 /* Mobile Controls - Atari Style */
 #joystick-container {
     position: fixed;
-    bottom: 40px;
-    left: 40px;
-    width: 120px;
-    height: 120px;
+    bottom: 20px;
+    left: 20px;
+    width: 100px;
+    height: 100px;
     background: #2a2a2a;
     border: 4px solid #00ffff;
     border-radius: 50%;
@@ -86,14 +129,47 @@ body {
     border-radius: 50%;
 }
 
+#button-pause {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(145deg, #FFD700, #FFA500);
+    border: 3px solid #FFFF00;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5),
+                0 0 15px rgba(255, 215, 0, 0.6);
+    touch-action: none;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    color: #000000;
+    font-size: 24px;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#button-pause.pressed {
+    transform: scale(0.95);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5),
+                0 0 10px rgba(255, 215, 0, 0.8);
+}
+
 #button-jump {
     position: fixed;
-    bottom: 30px;
-    right: 90px;
-    width: 70px;
-    height: 70px;
+    bottom: 80px;
+    right: 43px;
+    width: 60px;
+    height: 60px;
+    font-size: 16px;
+
     background: linear-gradient(145deg, #00cc00, #008800);
-    border: 4px solid #33ff33;
+    border: 3px solid #33ff33;
     border-radius: 50%;
     box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5),
                 0 0 20px rgba(0, 255, 0, 0.6);
@@ -106,7 +182,7 @@ body {
     font-family: 'Courier New', monospace;
     font-weight: bold;
     color: #ffffff;
-    font-size: 24px;
+    font-size: 20px;
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
     user-select: none;
     -webkit-user-select: none;
@@ -139,11 +215,11 @@ body {
 #button-a,
 #button-b {
     position: fixed;
-    bottom: 100px;
-    width: 80px;
-    height: 80px;
+    bottom: 15px;
+    width: 60px;
+    height: 60px;
     background: linear-gradient(145deg, #cc0000, #880000);
-    border: 4px solid #ff3333;
+    border: 3px solid #ff3333;
     border-radius: 50%;
     box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5),
                 0 0 20px rgba(255, 0, 0, 0.6);
@@ -156,7 +232,7 @@ body {
     font-family: 'Courier New', monospace;
     font-weight: bold;
     color: #ffffff;
-    font-size: 28px;
+    font-size: 24px;
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
     user-select: none;
     -webkit-user-select: none;
@@ -164,11 +240,11 @@ body {
 }
 
 #button-a {
-    right: 140px;
+    right: 80px;
 }
 
 #button-b {
-    right: 40px;
+    right: 10px;
     background: linear-gradient(145deg, #0066cc, #004488);
     border-color: #3399ff;
     box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5),
@@ -176,8 +252,9 @@ body {
 }
 
 #button-a .label,
-#button-b .label {
-    font-size: 10px;
+#button-b .label,
+#button-jump .label {
+    font-size: 9px;
     margin-top: 2px;
     opacity: 0.8;
 }
@@ -209,6 +286,7 @@ body {
 /* Show controls on mobile */
 @media (hover: none) and (pointer: coarse) {
     #joystick-container,
+    #button-pause,
     #button-jump,
     #button-a,
     #button-b {
@@ -218,6 +296,7 @@ body {
 
 /* Fallback for mobile detection via JS */
 body.mobile-controls #joystick-container,
+body.mobile-controls #button-pause,
 body.mobile-controls #button-jump,
 body.mobile-controls #button-a,
 body.mobile-controls #button-b {
