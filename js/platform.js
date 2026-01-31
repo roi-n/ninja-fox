@@ -9,11 +9,17 @@ class Platform {
         this.stage = stage;
         this.isMoving = false;
         this.lastX = x; // Track position for moving platform logic
+        this.fire = null; // Optional fire obstacle on this platform
     }
 
     update(dt) {
         // Base platforms don't move
         this.lastX = this.x;
+
+        // Update fire if present
+        if (this.fire) {
+            this.fire.update(dt);
+        }
     }
 
     draw(ctx, camera) {
@@ -85,6 +91,11 @@ class Platform {
                 ctx.fillStyle = colors.stroke;
                 ctx.fillRect(screenX + i, screenY + 2, 2, this.height - 4);
             }
+        }
+
+        // Draw fire if present
+        if (this.fire) {
+            this.fire.draw(ctx, camera);
         }
     }
 }
@@ -190,27 +201,56 @@ class PlatformGenerator {
 
             const y = minY + Math.random() * (maxY - minY);
 
-            // Stage 4+: 30% chance of moving platform, otherwise normal
+            // Stage 4+: 20% chance of moving platform, otherwise normal
+            // Stage 5: 40% chance of fire platform
             // Stage 1-3: Normal platforms (70% one-way, 30% solid)
             let newPlatform;
-            if (currentStage >= 4 && Math.random() < 0.3) {
-                // Create moving platform
-                const moveDistance = 80 + Math.random() * 80; // Move 80-160 pixels
+            const isLastPlatformMoving = lastPlatform && lastPlatform.isMoving;
+
+            if (currentStage >= 4 && Math.random() < 0.2) {
+                // Create moving platform - moves horizontally
+                // Player double jump can cover ~180 pixels horizontal
+                // If previous was also moving: worst case is moveDist1 + gap + moveDist2 from platforms
+                const moveDistance = 40 + Math.random() * 50; // Move 40-90 pixels
                 const leftBound = currentX;
-                const rightBound = currentX + moveDistance;
+                const rightBound = currentX + width + moveDistance; // Right edge limit (not left edge!)
                 newPlatform = new MovingPlatform(currentX, y, width, 16, leftBound, rightBound, currentStage);
+
+                // Position for next platform: after the moving platform's rightmost position
+                // The platform's right edge can reach up to rightBound = currentX + width + moveDistance
+                // Add a gap that ensures double jump can reach (considering both platforms might be at far ends)
+                const nextGap = isLastPlatformMoving ?
+                    (2 + Math.random() * 2) * this.tileSize :   // 32-64px if after moving platform
+                    (2 + Math.random() * 3) * this.tileSize;    // 32-80px otherwise
+                currentX = rightBound + nextGap; // Start next platform after this one's rightmost point
+            } else if (currentStage >= 5 && Math.random() < 0.4) {
+                // Create fire platform - must be solid and wide enough
+                const minFirePlatformWidth = 96; // 24px landing + 48px fire + 24px landing
+                const firePlatformWidth = Math.max(minFirePlatformWidth, 96 + Math.floor(Math.random() * 3) * 16);
+
+                newPlatform = new Platform(currentX, y, firePlatformWidth, 16, 'solid', currentStage);
+
+                // Add fire to the platform
+                const fireWidth = 32 + Math.floor(Math.random() * 32); // 32-64 pixels wide
+                const landingSpace = 24; // Space before and after fire for landing
+                const fireX = currentX + landingSpace; // Position fire with landing space before it
+
+                newPlatform.fire = new Fire(fireX, y - 24, fireWidth);
+
+                currentX += firePlatformWidth;
             } else {
                 // Create normal platform
                 const type = Math.random() > 0.3 ? 'oneway' : 'solid';
                 const height = type === 'solid' ? 16 : 8;
                 newPlatform = new Platform(currentX, y, width, height, type, currentStage);
+                currentX += width;
             }
 
             this.platforms.push(newPlatform);
 
             // Update for next iteration
             lastPlatform = newPlatform;
-            currentX += width;
+            // currentX already updated in the if/else above
         }
 
         this.lastPlatformX = currentX;
@@ -226,6 +266,37 @@ class PlatformGenerator {
                 platform.update(dt);
             }
         });
+
+        // Check for collisions between moving platforms
+        const movingPlatforms = this.platforms.filter(p => p.isMoving);
+        for (let i = 0; i < movingPlatforms.length; i++) {
+            for (let j = i + 1; j < movingPlatforms.length; j++) {
+                const p1 = movingPlatforms[i];
+                const p2 = movingPlatforms[j];
+
+                // Check AABB collision (horizontal overlap check is sufficient since they're on different heights)
+                const horizontalOverlap = p1.x < p2.x + p2.width && p1.x + p1.width > p2.x;
+                const verticalOverlap = Math.abs(p1.y - p2.y) < 20; // Close enough vertically
+
+                if (horizontalOverlap && verticalOverlap) {
+                    // Collision detected! Both platforms change direction
+                    p1.direction *= -1;
+                    p2.direction *= -1;
+
+                    // Separate them slightly to prevent sticking
+                    if (p1.direction > 0) {
+                        p1.x -= 2;
+                    } else {
+                        p1.x += 2;
+                    }
+                    if (p2.direction > 0) {
+                        p2.x -= 2;
+                    } else {
+                        p2.x += 2;
+                    }
+                }
+            }
+        }
 
         // Remove platforms far behind camera
         this.platforms = this.platforms.filter(p => p.x + p.width > cameraX - 100);
@@ -414,7 +485,7 @@ class Fire {
         this.x = x;
         this.y = y;
         this.width = width;
-        this.height = 16;
+        this.height = 24; // Taller to be more visible
         this.animTime = 0;
         this.dead = false;
     }
@@ -427,35 +498,49 @@ class Fire {
         const screenX = this.x - camera.x;
         const screenY = this.y - camera.y;
 
-        // Animated fire effect
+        // Animated fire effect - much more vibrant and visible
         const flameFrame = Math.floor(this.animTime) % 3;
 
-        // Base fire (red/orange)
-        ctx.fillStyle = '#FF4500';
-        for (let i = 0; i < this.width; i += 4) {
-            const flameHeight = 8 + Math.sin(this.animTime * 2 + i * 0.5) * 4;
-            ctx.fillRect(screenX + i, screenY + this.height - flameHeight, 4, flameHeight);
+        // Glow effect (orange halo)
+        ctx.fillStyle = 'rgba(255, 140, 0, 0.3)';
+        ctx.fillRect(screenX - 2, screenY - 2, this.width + 4, this.height + 4);
+
+        // Base fire (bright red)
+        ctx.fillStyle = '#FF0000';
+        for (let i = 0; i < this.width; i += 3) {
+            const flameHeight = 12 + Math.sin(this.animTime * 2 + i * 0.5) * 6;
+            ctx.fillRect(screenX + i, screenY + this.height - flameHeight, 3, flameHeight);
+        }
+
+        // Middle flames (orange)
+        ctx.fillStyle = '#FF8C00';
+        for (let i = 1; i < this.width; i += 4) {
+            const flameHeight = 14 + Math.sin(this.animTime * 3 + i * 0.3) * 5;
+            ctx.fillRect(screenX + i, screenY + this.height - flameHeight, 3, flameHeight);
         }
 
         // Bright flames (yellow)
         ctx.fillStyle = '#FFD700';
-        for (let i = 2; i < this.width; i += 8) {
-            const flameHeight = 6 + Math.sin(this.animTime * 3 + i * 0.3) * 3;
-            ctx.fillRect(screenX + i, screenY + this.height - flameHeight, 3, flameHeight - 2);
+        for (let i = 2; i < this.width; i += 6) {
+            const flameHeight = 10 + Math.sin(this.animTime * 4 + i * 0.4) * 4;
+            ctx.fillRect(screenX + i, screenY + this.height - flameHeight, 2, flameHeight);
         }
 
         // Hot core (white)
         ctx.fillStyle = '#FFFFFF';
-        for (let i = 4; i < this.width; i += 12) {
-            const coreHeight = 3 + Math.sin(this.animTime * 4 + i * 0.2) * 2;
-            ctx.fillRect(screenX + i, screenY + this.height - coreHeight, 2, coreHeight - 1);
+        for (let i = 0; i < this.width; i += 8) {
+            const coreHeight = 6 + Math.sin(this.animTime * 5 + i * 0.2) * 3;
+            ctx.fillRect(screenX + i + 2, screenY + this.height - coreHeight, 2, coreHeight);
         }
 
-        // Embers/particles above fire
-        ctx.fillStyle = flameFrame === 0 ? '#FF6347' : '#FFA500';
-        for (let i = 0; i < this.width / 8; i++) {
-            const px = screenX + (i * 8) + Math.sin(this.animTime + i) * 3;
-            const py = screenY - 2 - (this.animTime % 1) * 8;
+        // Embers/particles above fire (more visible)
+        for (let i = 0; i < this.width / 6; i++) {
+            const emberPhase = (this.animTime + i * 0.5) % 1;
+            const px = screenX + (i * 6) + Math.sin(this.animTime * 2 + i) * 4;
+            const py = screenY - emberPhase * 20; // Rise up to 20 pixels
+            const alpha = 1 - emberPhase;
+
+            ctx.fillStyle = i % 2 === 0 ? `rgba(255, 100, 0, ${alpha})` : `rgba(255, 215, 0, ${alpha})`;
             ctx.fillRect(px, py, 2, 2);
         }
     }

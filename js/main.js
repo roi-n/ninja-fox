@@ -42,14 +42,11 @@ class Game {
         this.playerBullets = [];
         this.magazines = [];
         this.hearts = [];
-        this.fires = [];
         this.portal = null;
 
         // Spawn tracking
         this.nextMagazineSpawn = 0;
         this.nextHeartSpawn = 0;
-        this.nextFireSpawn = 0;
-        this.nextMovingPlatformSpawn = 0;
 
         // Difficulty
         this.difficultyLevel = 0;
@@ -144,8 +141,12 @@ class Game {
         this.playerBullets = [];
         this.magazines = [];
         this.hearts = [];
-        this.fires = [];
         this.portal = null;
+
+        // Reset god mode state in audio immediately (don't wait for update loop)
+        this.player.godMode = false;
+        this.audio.setGodMode(false);
+
 
         // Initialize spawn distances with variance
         this.nextMagazineSpawn = GameConfig.magazineSpawnDistance +
@@ -232,7 +233,33 @@ class Game {
             return;
         }
 
-        if (this.state === 'gameover' || this.state === 'victory') {
+        if (this.state === 'gameover') {
+            // Check for space to retry - use key down instead of key pressed
+            if (this.input.isKeyDown(' ') || this.input.wasMobileKeyPressed()) {
+                console.log("restarting!!")
+                this.input.reset();
+                this.startGame();
+                console.log("restarted!!")
+            }
+            return;
+        }
+
+        if (this.state === 'victory') {
+            // Update fireworks timer
+            if (this.fireworkTimer === undefined) this.fireworkTimer = 0;
+            this.fireworkTimer -= dt;
+
+            // Spawn fireworks at random intervals (every 0.3-0.6 seconds)
+            if (this.fireworkTimer <= 0) {
+                const x = 50 + Math.random() * (this.width - 100);
+                const y = 30 + Math.random() * (this.height / 2);
+                this.particles.emitFirework(x, y);
+                this.fireworkTimer = 0.3 + Math.random() * 0.3;
+            }
+
+            // Update particles
+            this.particles.update(dt);
+
             // Check for space to retry - use key down instead of key pressed
             if (this.input.isKeyDown(' ') || this.input.wasMobileKeyPressed()) {
                 console.log("restarting!!")
@@ -259,6 +286,11 @@ class Game {
             return;
         }
 
+        // Update player god mode from input
+        const godModeActive = this.input.isGodModeActive();
+        this.player.godMode = godModeActive;
+        this.audio.setGodMode(godModeActive);
+
         // Update player
         const soundEffect = this.player.handleInput(this.input, dt);
         if (soundEffect) {
@@ -277,6 +309,7 @@ class Game {
 
         // Check death (fall off screen)
         if (this.player.y > this.height + 50) {
+            console.log(`☠️ Player died at ${this.distance}m from falling off screen`);
             this.gameOver();
             return;
         }
@@ -305,11 +338,26 @@ class Game {
                 );
                 this.screenShake(2, 0.1);
             } else if (collision.type === 'player_hit') {
-                if (this.player.takeDamage()) {
+                // God mode: kill enemy on touch instead of taking damage
+                if (this.player.godMode) {
+                    console.log(`🌈 GOD MODE - Enemy killed on touch!`);
+                    collision.enemy.dead = true;
+                    this.audio.playSound('enemy');
+                    this.score += collision.enemy.points;
+                    this.particles.emit(
+                        collision.enemy.x + collision.enemy.width / 2,
+                        collision.enemy.y + collision.enemy.height / 2,
+                        12,
+                        '#FFD700'
+                    );
+                    this.screenShake(2, 0.1);
+                } else if (this.player.takeDamage()) {
+                    console.log(`💔 Player hit by ${collision.enemy.type} at ${this.distance}m! Health: ${this.player.health}/${this.player.maxHealth}`);
                     this.audio.playSound('damage');
                     this.screenShake(4, 0.2);
 
                     if (this.player.health <= 0) {
+                        console.log(`☠️ Player died at ${this.distance}m from ${collision.enemy.type}`);
                         this.gameOver();
                         return;
                     }
@@ -330,11 +378,24 @@ class Game {
                     '#00FF00'
                 );
             } else if (bulletCollision.type === 'player_hit_by_bullet') {
-                if (this.player.takeDamage()) {
+                // God mode: bullets pass through harmlessly (already marked as dead)
+                if (this.player.godMode) {
+                    console.log(`🌈 GOD MODE - Bullet destroyed on touch!`);
+                    this.audio.playSound('enemy');
+                    this.score += 5;
+                    this.particles.emit(
+                        this.player.x + this.player.width / 2,
+                        this.player.y + this.player.height / 2,
+                        8,
+                        '#FFD700'
+                    );
+                } else if (this.player.takeDamage()) {
+                    console.log(`💥 Player hit by bullet at ${this.distance}m! Health: ${this.player.health}/${this.player.maxHealth}`);
                     this.audio.playSound('damage');
                     this.screenShake(3, 0.15);
 
                     if (this.player.health <= 0) {
+                        console.log(`☠️ Player died at ${this.distance}m from bullet`);
                         this.gameOver();
                         return;
                     }
@@ -355,11 +416,24 @@ class Game {
                     '#8B4513'
                 );
             } else if (poopCollision.type === 'player_hit_by_poop') {
-                if (this.player.takeDamage()) {
+                // God mode: poop passes through harmlessly (already marked as dead)
+                if (this.player.godMode) {
+                    console.log(`🌈 GOD MODE - Poop destroyed on touch!`);
+                    this.audio.playSound('enemy');
+                    this.score += 5;
+                    this.particles.emit(
+                        this.player.x + this.player.width / 2,
+                        this.player.y + this.player.height / 2,
+                        8,
+                        '#FFD700'
+                    );
+                } else if (this.player.takeDamage()) {
+                    console.log(`💩 Player hit by bird poop at ${this.distance}m! Health: ${this.player.health}/${this.player.maxHealth}`);
                     this.audio.playSound('damage');
                     this.screenShake(3, 0.15);
 
                     if (this.player.health <= 0) {
+                        console.log(`☠️ Player died at ${this.distance}m from bird poop`);
                         this.gameOver();
                         return;
                     }
@@ -529,41 +603,26 @@ class Game {
             return true;
         });
 
-        // Spawn fires based on stage or distance
-        const shouldSpawnFire = GameConfig.stagesMode ? this.currentStage >= 5 : this.distance >= (GameConfig.fireDistance || 1500);
+        // Check fire collisions from platforms
+        for (let platform of this.platforms.platforms) {
+            if (!platform.fire) continue;
 
-        if (shouldSpawnFire && this.player.x >= this.nextFireSpawn) {
-            const suitablePlatforms = this.platforms.platforms.filter(p =>
-                p.x > this.nextFireSpawn - 100 &&
-                p.x < this.nextFireSpawn + 100 &&
-                p.y < this.height - 50 &&
-                !p.isMoving // Don't spawn fire on moving platforms
-            );
+            const fire = platform.fire;
 
-            if (suitablePlatforms.length > 0) {
-                const platform = suitablePlatforms[Math.floor(Math.random() * suitablePlatforms.length)];
-                const fireWidth = 32 + Math.floor(Math.random() * 32); // 32-64 pixels wide
-                const fireX = platform.x + Math.random() * Math.max(0, platform.width - fireWidth);
-                this.fires.push(new Fire(fireX, platform.y - 16, fireWidth));
-            }
-
-            // Schedule next fire spawn
-            this.nextFireSpawn += 300 + Math.random() * 200; // Every 300-500 pixels
-        }
-
-        // Update fires
-        this.fires.forEach(fire => fire.update(dt));
-
-        // Check fire collisions
-        this.fires = this.fires.filter(fire => {
-            if (fire.dead) return false;
-
-            // Check collision with player
             if (CollisionDetector.checkAABB(
                 { x: this.player.x, y: this.player.y, width: this.player.width, height: this.player.height },
                 fire.getBounds()
             )) {
-                if (this.player.takeDamage()) {
+                // God mode: ignore fire damage
+                if (this.player.godMode) {
+                    // No damage, just log
+                    // Don't spam the console, only log once per fire
+                    if (!fire.godModeLogged) {
+                        console.log(`🌈 GOD MODE - Fire harmless!`);
+                        fire.godModeLogged = true;
+                    }
+                } else if (this.player.takeDamage()) {
+                    console.log(`🔥 Player hit by fire at ${this.distance}m! Health: ${this.player.health}/${this.player.maxHealth}`);
                     this.audio.playSound('damage');
                     this.screenShake(4, 0.2);
                     this.particles.emit(
@@ -574,17 +633,13 @@ class Game {
                     );
 
                     if (this.player.health <= 0) {
+                        console.log(`☠️ Player died at ${this.distance}m from fire`);
                         this.gameOver();
-                        return false;
+                        return;
                     }
                 }
             }
-
-            // Remove fires far behind camera
-            if (fire.x < this.camera.x - 100) return false;
-
-            return true;
-        });
+        }
 
         // Update particles
         this.particles.update(dt);
@@ -621,16 +676,45 @@ class Game {
 
             // Spawn portal after completing final stage
             if (!this.portal && this.currentStage >= GameConfig.totalStages) {
-                const portalDistance = GameConfig.totalStages * GameConfig.stageDistance * 10 + 200;
-                const suitablePlatforms = this.platforms.platforms.filter(p =>
-                    p.x > portalDistance - 50 &&
-                    p.x < portalDistance + 50 &&
-                    p.y < this.height - 100
-                );
+                // Portal spawns after the last stage: (totalStages * stageDistance + stageDistance) in meters * 10 pixels per meter
+                const portalDistanceMeters = GameConfig.totalStages * GameConfig.stageDistance + GameConfig.stageDistance;
+                const portalDistance = portalDistanceMeters * 10; // Convert meters to pixels
+                console.log(`Portal will be spawned at ${portalDistanceMeters}m (${portalDistance} pixels)`);
 
-                if (suitablePlatforms.length > 0) {
-                    const platform = suitablePlatforms[0];
-                    this.portal = new Portal(platform.x + platform.width / 2 - 24, platform.y - 64);
+                // Create a special platform for the portal
+                const portalPlatformX = portalDistance;
+                const portalPlatformY = this.height - 100;
+                const portalPlatformWidth = 96;
+
+                // Check if we've reached the portal distance
+                if (this.player.x >= portalDistance - 200) {
+                    // Add special portal platform if not already added
+                    const portalPlatformExists = this.platforms.platforms.some(p =>
+                        p.x === portalPlatformX && p.y === portalPlatformY
+                    );
+
+                    if (!portalPlatformExists) {
+                        // Create golden platform for portal
+                        const portalPlatform = new Platform(
+                            portalPlatformX,
+                            portalPlatformY,
+                            portalPlatformWidth,
+                            16,
+                            'solid',
+                            5
+                        );
+                        this.platforms.platforms.push(portalPlatform);
+                        console.log(`Created special portal platform at ${portalPlatformX} pixels`);
+                    }
+
+                    // Spawn portal on the platform
+                    if (!this.portal) {
+                        this.portal = new Portal(
+                            portalPlatformX + portalPlatformWidth / 2 - 24,
+                            portalPlatformY - 64
+                        );
+                        console.log(`Spawned portal at ${portalPlatformX} pixels`);
+                    }
                 }
             }
 
@@ -667,7 +751,9 @@ class Game {
 
     victory() {
         this.state = 'victory';
-        this.audio.playSound('star'); // Reuse star sound for victory
+        console.log('🎉 VICTORY! Player completed all stages!');
+        this.audio.playVictoryMusic();
+        this.fireworkTimer = 0; // Initialize fireworks timer
     }
 
     draw() {
@@ -873,6 +959,9 @@ class Game {
         gradient.addColorStop(1, 'rgba(0, 255, 255, 0.8)');
         this.ctx.fillStyle = gradient;
         this.ctx.fillRect(0, 0, this.width, this.height);
+
+        // Draw fireworks particles
+        this.particles.draw(this.ctx);
 
         // Victory text with glow
         this.ctx.save();

@@ -47,6 +47,23 @@ class ParticleSystem {
         }
     }
 
+    // Fireworks explosion for victory screen
+    emitFirework(x, y) {
+        const colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#FFD700', '#FF6600'];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const particleCount = 20 + Math.floor(Math.random() * 20); // 20-40 particles
+
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.3;
+            const speed = 80 + Math.random() * 120;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            const size = 2 + Math.random() * 3;
+            const lifetime = 1.0 + Math.random() * 1.0;
+            this.particles.push(new Particle(x, y, vx, vy, color, size, lifetime));
+        }
+    }
+
     update(dt) {
         this.particles = this.particles.filter(p => p.update(dt));
     }

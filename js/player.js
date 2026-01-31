@@ -82,6 +82,9 @@ class Player {
         // Visual effects
         this.flashTime = 0;
 
+        // God mode
+        this.godMode = false;
+
         // Ice physics
         this.onIce = false;
         this.slideVelocity = 0;
@@ -201,9 +204,15 @@ class Player {
     }
 
     takeDamage() {
+        if (this.godMode) {
+            console.log('🌈 GOD MODE - No damage taken!');
+            return false;
+        }
+
         if (this.invulnerable) return false;
 
         this.health--;
+        console.log(`💔 Player hit! Health: ${this.health}/${this.maxHealth}`)
         this.invulnerable = true;
         this.invulnerableTime = 1.0;
         this.state = 'hurt';
@@ -380,8 +389,8 @@ class Player {
         const screenX = this.x - camera.x;
         const screenY = this.y - camera.y;
 
-        // Flash when invulnerable
-        if (this.invulnerable && Math.floor(this.flashTime * 10) % 2 === 0) {
+        // Flash when invulnerable (but not in god mode)
+        if (!this.godMode && this.invulnerable && Math.floor(this.flashTime * 10) % 2 === 0) {
             return;
         }
 
@@ -404,18 +413,32 @@ class Player {
     drawSprite(ctx) {
         // Larger, more detailed ninja fox (24x24)
 
+        // Rainbow colors for god mode
+        let bodyColor = '#FF6600';
+        let headColor = '#FF8833';
+        let scarfColor = '#FF0000';
+
+        if (this.godMode) {
+            // Cycle through rainbow colors MUCH faster
+            const time = Date.now() / 20; // Changed from 100 to 20 for 5x faster cycling
+            const hue = (time % 360);
+            bodyColor = `hsl(${hue}, 100%, 50%)`;
+            headColor = `hsl(${(hue + 120) % 360}, 100%, 60%)`;
+            scarfColor = `hsl(${(hue + 240) % 360}, 100%, 50%)`;
+        }
+
         // Body (orange, larger)
-        ctx.fillStyle = '#FF6600';
+        ctx.fillStyle = bodyColor;
         ctx.fillRect(6, 10, 12, 10);
 
         // Head (lighter orange)
-        ctx.fillStyle = '#FF8833';
+        ctx.fillStyle = headColor;
         ctx.fillRect(4, 4, 16, 8);
 
         // Ears (triangular look)
         ctx.fillRect(3, 2, 4, 3);
         ctx.fillRect(17, 2, 4, 3);
-        ctx.fillStyle = '#FF6600';
+        ctx.fillStyle = bodyColor;
         ctx.fillRect(4, 3, 2, 1);
         ctx.fillRect(18, 3, 2, 1);
 
@@ -436,7 +459,7 @@ class Player {
         ctx.fillRect(10, 10, 4, 2);
 
         // Legs with animation
-        ctx.fillStyle = '#FF6600';
+        ctx.fillStyle = bodyColor;
         if (this.state === 'running') {
             const frame = Math.floor(this.animTime * 10) % 2;
             if (frame === 0) {
@@ -452,7 +475,7 @@ class Player {
         }
 
         // Scarf (red, flowing)
-        ctx.fillStyle = '#FF0000';
+        ctx.fillStyle = scarfColor;
         ctx.fillRect(9, 12, 6, 3);
         if (this.state === 'running' || this.state === 'jumping') {
             ctx.fillRect(15, 13, 3, 2);

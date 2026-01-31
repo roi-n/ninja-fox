@@ -15,10 +15,35 @@ class InputHandler {
         this.buttonBWasPressed = false;
         this.buttonPauseWasPressed = false;
 
+        // Cheat code tracking
+        this.keySequence = '';
+        this.lastKeyTime = 0;
+        this.godModeActivated = false;
+
         window.addEventListener('keydown', (e) => {
             this.keys[e.key.toLowerCase()] = true;
             if (!this.keyPressed[e.key.toLowerCase()]) {
                 this.keyPressed[e.key.toLowerCase()] = true;
+            }
+
+            // Track key sequence for cheat codes
+            const now = Date.now();
+            if (now - this.lastKeyTime > 1000) {
+                this.keySequence = ''; // Reset if too much time passed
+            }
+            this.keySequence += e.key.toLowerCase();
+            this.lastKeyTime = now;
+
+            // Keep only last 10 characters
+            if (this.keySequence.length > 10) {
+                this.keySequence = this.keySequence.slice(-10);
+            }
+
+            // Check for god mode cheat code: iddqd
+            if (this.keySequence.includes('iddqd')) {
+                this.godModeActivated = !this.godModeActivated;
+                console.log(`🌈 GOD MODE ${this.godModeActivated ? 'ACTIVATED' : 'DEACTIVATED'}! 🌈`);
+                this.keySequence = ''; // Reset sequence
             }
 
             // Visual feedback for keyboard presses on mobile controls
@@ -169,11 +194,19 @@ class InputHandler {
         }
     }
 
+    isGodModeActive() {
+        return this.godModeActivated;
+    }
+
     reset() {
         this.keyPressed = {};
         this.buttonJumpWasPressed = false;
         this.buttonAWasPressed = false;
         this.buttonBWasPressed = false;
         this.buttonPauseWasPressed = false;
+
+        // Reset god mode cheat code
+        this.godModeActivated = false;
+        this.keySequence = '';
     }
 }

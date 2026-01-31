@@ -7,6 +7,8 @@ class AudioManager {
         this.musicEnabled = true;
         this.sfxEnabled = true;
         this.initialized = false;
+        this.godMode = false;
+        this.currentMusicType = 'normal'; // 'normal' or 'godmode'
     }
 
     init() {
@@ -92,13 +94,31 @@ class AudioManager {
         let bassIndex = 0;
         let arpIndex = 0;
 
+        // God mode melody - INTENSE and FAST!
+        const godModeMelody = [
+            {note: 1047, duration: 0.08}, // C6 - higher and faster!
+            {note: 1175, duration: 0.08}, // D6
+            {note: 1319, duration: 0.08}, // E6
+            {note: 1397, duration: 0.08}, // F6
+            {note: 1568, duration: 0.08}, // G6
+            {note: 1047, duration: 0.08}, // C6
+            {note: 1319, duration: 0.08}, // E6
+            {note: 1568, duration: 0.08}, // G6
+            {note: 1760, duration: 0.12}, // A6
+            {note: 1568, duration: 0.08}, // G6
+            {note: 1319, duration: 0.08}, // E6
+            {note: 1047, duration: 0.08}, // C6
+        ];
+
         const playMusic = () => {
             if (!this.musicEnabled) {
                 setTimeout(playMusic, 100);
                 return;
             }
 
-            const currentNote = melody[melodyIndex];
+            // Choose melody based on god mode
+            const activeMelody = this.godMode ? godModeMelody : melody;
+            const currentNote = activeMelody[melodyIndex % activeMelody.length];
 
             // Play melody note
             if (currentNote.note > 0) {
@@ -158,11 +178,18 @@ class AudioManager {
                 arpIndex++;
             }
 
-            melodyIndex = (melodyIndex + 1) % melody.length;
+            melodyIndex = (melodyIndex + 1) % (this.godMode ? godModeMelody.length : melody.length);
             setTimeout(playMusic, currentNote.duration * 1000);
         };
 
         playMusic();
+    }
+
+    setGodMode(enabled) {
+        if (this.godMode !== enabled) {
+            this.godMode = enabled;
+            console.log(`🎵 Music switched to ${enabled ? 'GOD MODE' : 'NORMAL'} mode`);
+        }
     }
 
     // Play sound effect
@@ -258,6 +285,78 @@ class AudioManager {
                 osc.stop(now + 1);
                 break;
         }
+    }
+
+    // Play celebratory victory music
+    playVictoryMusic() {
+        if (!this.audioContext) return;
+
+        // Stop background music temporarily
+        const wasMusicEnabled = this.musicEnabled;
+        this.musicEnabled = false;
+
+        // Victory fanfare - triumphant and celebratory
+        const victoryMelody = [
+            {note: 523, duration: 0.15}, // C5
+            {note: 659, duration: 0.15}, // E5
+            {note: 784, duration: 0.15}, // G5
+            {note: 1047, duration: 0.3}, // C6
+            {note: 0, duration: 0.1},
+            {note: 784, duration: 0.15}, // G5
+            {note: 1047, duration: 0.3}, // C6
+            {note: 0, duration: 0.1},
+            {note: 1047, duration: 0.2}, // C6
+            {note: 988, duration: 0.2}, // B5
+            {note: 880, duration: 0.2}, // A5
+            {note: 784, duration: 0.2}, // G5
+            {note: 659, duration: 0.2}, // E5
+            {note: 784, duration: 0.2}, // G5
+            {note: 1047, duration: 0.6}, // C6 (hold)
+        ];
+
+        let noteIndex = 0;
+        const now = this.audioContext.currentTime;
+        let startTime = now;
+
+        victoryMelody.forEach((noteData) => {
+            if (noteData.note > 0) {
+                const osc = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+
+                osc.type = 'square';
+                osc.frequency.value = noteData.note;
+                gainNode.gain.value = 0.15;
+
+                osc.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+
+                osc.start(startTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + noteData.duration);
+                osc.stop(startTime + noteData.duration);
+
+                // Add harmony (fifth above)
+                const harmonyOsc = this.audioContext.createOscillator();
+                const harmonyGain = this.audioContext.createGain();
+
+                harmonyOsc.type = 'sine';
+                harmonyOsc.frequency.value = noteData.note * 1.5;
+                harmonyGain.gain.value = 0.08;
+
+                harmonyOsc.connect(harmonyGain);
+                harmonyGain.connect(this.audioContext.destination);
+
+                harmonyOsc.start(startTime);
+                harmonyGain.gain.exponentialRampToValueAtTime(0.01, startTime + noteData.duration);
+                harmonyOsc.stop(startTime + noteData.duration);
+            }
+
+            startTime += noteData.duration;
+        });
+
+        // Resume background music after victory music finishes
+        setTimeout(() => {
+            this.musicEnabled = wasMusicEnabled;
+        }, (startTime - now) * 1000 + 500);
     }
 
     toggleMusic() {

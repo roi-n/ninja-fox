@@ -1,261 +1,143 @@
-# Ninja Fox Platformer - Game Design Document
+# NINJA FOX - Game Design Document
 
-## 1. Game Overview
-- **Genre**: 8-bit side-scrolling platformer with continuous horizontal progression
-- **Objective**: Maximize score by collecting stars and defeating enemies while avoiding death
-- **Win Condition**: No end state - pure score-chasing arcade gameplay
-- **Lose Condition**: Player dies (falls into pits or takes damage from enemies)
+## 1. Game Concept
+Retro-style 2D platformer featuring a ninja fox running infinitely across 5 distinct stages, fighting enemies, avoiding obstacles, and collecting power-ups. 8-bit Atari aesthetic with procedural chiptune music and victory condition.
 
-## 2. Visual Style
-- **Art Style**: Authentic 8-bit pixel art (NES/Atari era aesthetic)
-- **Color Palette**: Limited 16-color palette for retro authenticity
-- **Resolution**: 320x240 base canvas, scaled up with nearest-neighbor to maintain crisp pixels
-- **Animation**: 3-4 frame sprite animations for character actions
-- **Background**: Parallax scrolling with 2 layers (distant mountains/clouds + near trees/bushes)
+## 2. Controls
+- **Keyboard**: A/D (move), W (jump/double jump), , (kick), . (shoot), Space (pause)
+- **Mobile**: Virtual joystick (move), Jump button, A/B buttons (kick/shoot), Pause button
+- **Cheat Code**: Type "iddqd" to toggle god mode (resets on death/restart)
 
-## 3. Player Character - Ninja Fox
-- **Design**: Orange/red fox sprite with ninja headband and scarf
-- **Size**: 16x16 pixels
-- **States**: idle, running, jumping, falling, kicking, sword-stabbing, hurt, death
-- **Health**: 3 hit points (displayed as hearts in HUD)
-- **Movement Speed**: 120 pixels/second base, 180 pixels/second when running
+## 3. Core Mechanics
+- **Movement**: 120 px/s horizontal speed with smooth acceleration
+- **Jump**: Single jump (-300 force), double jump available after first jump (max ~180px horizontal, ~56px vertical reach)
+- **Combat**: Melee kick, ranged pistol (10 ammo, collectible magazines)
+- **Health**: 3 hearts, collectible heart pickups, 1 second invulnerability after damage
+- **Physics**: Gravity (800 px/s²), coyote time (0.1s), jump buffer (0.15s), ice sliding in stage 3+
 
-## 4. Core Mechanics
+## 4. Stages System (5 Stages)
+- **Progression**: Every 500m (configurable via `GameConfig.stageDistance` in config.js, set to 100 for testing)
+- **Notification**: "Stage X" displays for 1 second at top-center when entering new stage
+- **HUD Indicator**: Shows "STAGE X/5" in top-left corner during gameplay
+- **Victory**: Swirling portal appears at `(totalStages + 1) * stageDistance` meters (600m default) on dedicated 96px golden platform
 
-### 4.1 Movement
-- **Walk/Run**: W/A/S/D keys (A=left, D=right, W=jump, S=crouch/drop through platforms)
-- **Jump**: Variable height based on hold duration (max 3 tiles high)
-- **Gravity**: 800 pixels/second² for arcade-feel physics
-- **Coyote Time**: 0.1 second grace period after leaving platform edges
-- **Jump Buffer**: 0.15 second input buffering for responsive controls
+## 5. Stage 1 - Tutorial Plains (0-100m)
+- **Platforms**: Brown/tan colored, normal difficulty
+- **Enemies**: Basic goblins (patrol, shoot normal speed), skulls (fly in sine wave)
+- **Features**: Standard platforming, learn basic mechanics
 
-### 4.2 Combat System
-- **Jump Attack**: Landing on enemy from above (must hit top 25% of enemy hitbox)
-- **Kick (Z key)**:
-  - Swirling kick animation (360° spin)
-  - 0.4 second duration, invulnerability during animation
-  - Forward momentum boost (50 pixels)
-  - Kills enemies on contact
-- **Sword Stab (X key)**:
-  - Quick forward thrust (16 pixel reach)
-  - 0.3 second duration
-  - Kills enemies in front arc
-  - No invulnerability
+## 6. Stage 2 - Purple Skies (100-200m)
+- **Platforms**: Purple themed
+- **Enemies**: Birds (fly in sine waves, drop poop projectiles when player nearby), Red Goblins (shoot 3x faster than normal goblins)
+- **Challenge**: Aerial threats from above, faster projectiles
 
-### 4.3 Platform Types
-- **Solid Platforms**: Full collision on all sides (ground level, thick platforms)
-- **One-Way Platforms**: Can jump through from below, stand on top, drop through with S+Jump
-- **Platform Density**: One platform every 2-5 tiles horizontally, varying heights
+## 7. Stage 3 - Ice Caverns (200-300m)
+- **Platforms**: Cyan/ice colored with reduced friction
+- **Physics**: Slippery platforms using `iceBaseAcceleration` (0.5) and `iceAccelerationDecay` (0.9) from config
+- **Challenge**: Precision movement on slick surfaces
 
-## 5. Enemies
+## 8. Stage 4 - Moving Gardens (300-400m)
+- **Platforms**: Green themed, 20% spawn as moving platforms
+- **Moving Platforms**: Travel 40-90 pixels horizontally at 40 px/s, reverse at bounds, carry player via delta-position tracking
+- **Spacing**: 32-64px gaps after moving platforms (tighter for double jump chaining), platforms never overlap. if two platforms collide, they both change direction.
+- **Challenge**: Timing jumps to catch moving platforms, double jump chaining required
 
-### 5.1 Enemy Types
-- **Goblin** (common): Walks back/forth on platforms, 1 HP, 10 points
-- **Bat** (uncommon): Flies in sine wave pattern, 1 HP, 20 points
-- **Armored Beetle** (rare): Slower but requires 2 hits or kick/sword to kill, 50 points
+## 9. Stage 5 - Fire Realm (400-500m)
+- **Platforms**: Red/fire themed, 40% spawn with fire obstacles
+- **Fire**: 24px tall visible flames with multi-layer animation (red/orange/yellow/white), glow effects, rising ember particles
+- **Layout**: 24px landing space + 32-64px fire + 24px+ landing space (can jump over fire)
+- **Challenge**: Jump timing to clear fire obstacles (instant damage on touch)
 
-### 5.2 Enemy Spawn System
-- Spawn off-screen to the right based on distance traveled
-- Difficulty scaling: Enemy density increases every 500 pixels traveled
-- Max 5 enemies on screen simultaneously
+## 10. Enemy Types & AI
+- **Goblin**: Patrols platforms, shoots bullets at normal speed (2-4s interval), 30 points
+- **RedGoblin**: Stage 2+, patrols faster (40 px/s), shoots 3x faster (0.67-1.33s interval), 50 points
+- **Skull**: Flies in sine wave pattern, simple aerial threat, 40 points
+- **Bird**: Stage 2+, flies in sine wave, drops poop when player within 150px, 2-4s poop interval, 60 points
+- **Poop**: Brown projectile dropped by birds, falls with gravity acceleration, 6x6px hitbox
 
-## 6. Collectibles
-- **Stars**: Worth 5 points each, float above platforms with bobbing animation
-- **Star Clusters**: Groups of 3-5 stars in challenging positions
-- **Spawn Rate**: One star every 3-7 tiles on average
+## 11. Platform Types & Generation
+- **Solid**: Full collision (16px height), 30% spawn rate
+- **One-way**: Jump through from below (8px height), 70% spawn rate
+- **Moving**: Stage 4+ only, horizontal movement with visual arrows, delta tracking for player movement. if platform moves, the player moves on it. platforms cannot overlap. they cannot be spawned on the same location, and if they bomp each other, both just change direction. make sure that there is a time that platforms are near enough so that the player can jump between one to the next. 
+- **Fire**: Stage 5+ only, solid platform with attached fire obstacle
+- **Generation**: 2-5 tile gaps (32-80px), platforms reachable within jump range, no overlaps
 
-## 7. Controls Mapping
-```
-W = Jump (hold for higher jump)
-A = Move Left
-S = Drop through one-way platforms (when held with jump)
-D = Move Right
-Z = Swirly Ninja Kick
-X = Sword Stab
-SPACE = Start game from splash screen
-ESC = Pause menu
-```
+## 12. God Mode (IDDQD Cheat Code)
+- **Activation**: Type "iddqd" anywhere during gameplay (key sequence tracking with 1s timeout)
+- **Toggle**: Type again to deactivate, automatically resets on death or game restart
+- **Visual**: Rapid rainbow color cycling using HSL hue rotation (`Date.now() / 20` for 5x faster blinking)
+- **Effects**: Invincible (no damage), instant-kill enemies/projectiles on touch, pass through fire harmlessly, bullets/poop disappear on contact
+- **Audio**: Automatically switches to intense god mode music (C6-A6 range, 0.08-0.12s tempo)
+- **Console**: Logs "🌈 GOD MODE ACTIVATED/DEACTIVATED! 🌈" and "🌈 GOD MODE - [action]" messages
 
-## 8. User Interface
+## 13. Audio System (Web Audio API)
+- **Normal Music**: Epic adventure melody (C5-G5 range, 0.2-0.6s duration) with bass line (C3-F3 triangle waves) and arpeggios (C4-G4 sine waves)
+- **God Mode Music**: Fast intense melody (C6-A6 range, 0.08-0.12s duration, square waves) for adrenaline rush
+- **Victory Music**: Triumphant fanfare (C5-C6 range with harmony fifths) that pauses background music
+- **SFX**: Jump (200-400Hz sweep), land (100Hz thud), kick (150-50Hz sawtooth), sword (400-200Hz sawtooth), star (523-784Hz chime), enemy (300-50Hz), damage (400-100Hz), death (440-55Hz)
+- **Controls**: Toggle music/SFX independently, `setGodMode(enabled)` switches music tracks
 
-### 8.1 Splash Screen
-- Title logo: "NINJA FOX" in blocky 8-bit font
-- Pixelated ninja fox character art
-- Flashing "PRESS SPACE TO START" text (0.5s interval)
-- Copyright text: "© 2026 RoiN"
-- Starfield background animation
+## 14. Game Architecture & Files
+- **main.js**: Game class with loop, states (splash/playing/paused/gameover/victory), collision detection, stage progression, portal spawning, damage logging
+- **player.js**: Player/PlayerBullet classes, movement physics, combat (kick/shoot), god mode visuals, ice physics, moving platform tracking
+- **platform.js**: Platform/MovingPlatform/Fire/Portal classes, PlatformGenerator with stage-aware procedural generation
+- **enemy.js**: Enemy/Goblin/RedGoblin/Skull/Bird/Poop/Bullet classes, AI behaviors, shooting mechanics
+- **audio.js**: AudioManager with procedural music generation, god mode switching, victory fanfare, SFX oscillators
+- **input.js**: InputHandler with keyboard/mobile input, cheat code detection (sequence tracking), god mode state
+- **mobile.js**: MobileControls with virtual joystick and touch buttons
+- **particle.js**: ParticleSystem for visual effects (star sparkles, enemy death, landing dust, fire embers)
+- **collision.js**: AABB collision detection utilities
+- **config.js**: GameConfig with stages settings, physics constants, difficulty scaling
 
-### 8.2 HUD (In-Game)
-- **Top-Left**: Score (6 digits, leading zeros)
-- **Top-Right**: Health hearts (3 max, pixel art hearts)
-- **Distance Meter**: Bottom-left corner showing meters traveled
+## 15. Rendering (HTML5 Canvas)
+- **Resolution**: 480x240 pixels, 2x scale for display, no image smoothing (crisp pixels)
+- **Camera**: Smooth following with 0.1 lerp smoothing, centered on player X position
+- **Background**: Parallax star field with 50 colorful Atari-style stars (white/gold/cyan/magenta/green)
+- **Animations**: State-based sprite rendering (idle/run/jump/fall/kick/stab/hurt) with frame timing
+- **Stage Themes**: Color palettes change per stage (brown/purple/cyan/green/red with highlights/shadows/strokes)
+- **Effects**: Screen shake, particle systems, fire glow, portal swirl, rainbow god mode
 
-### 8.3 Game Over Screen
-- "GAME OVER" text with scanline effect
-- Final score display
-- "Press SPACE to retry" prompt
+## 16. Difficulty Scaling & Progression
+- **Distance-based**: `difficultyLevel = distance / 100`, affects enemy spawn rates and platform gaps
+- **Platform Gaps**: 2-5 tiles (32-80px horizontal), 48px max vertical difference, always within jump range
+- **Enemy Spawning**: Increases with distance, stage-specific enemy types unlock
+- **Stage Hazards**: Cumulative (stage 5 has ice physics + moving platforms + fire + all enemies)
 
-## 9. Audio Design
-- **Music**: Looping 8-bit chiptune soundtrack (upbeat tempo, NES-style square/triangle waves)
-- **Sound Effects**:
-  - Jump: short ascending beep
-  - Land: soft thud
-  - Kick: whoosh + impact
-  - Sword: slash sound
-  - Star collect: cheerful chime
-  - Enemy defeat: explosion chirp
-  - Damage taken: descending tone
-  - Death: game over jingle
+## 17. Collectibles & Power-ups
+- **Stars**: Yellow collectibles, +10 points, float above platforms with bobbing animation
+- **Magazines**: Pistol ammo pickup, restores 10 bullets (max 20), spawns every 300-500m, 16x16px with "MAG" text
+- **Hearts**: Health pickup, restores 1 heart (max 3), spawns every 500-700m, 16x16px pixel heart
 
-## 10. Technical Implementation
+## 18. Victory Condition & Portal
+- **Spawn Distance**: `(GameConfig.totalStages + 1) * GameConfig.stageDistance` meters (600m with default settings)
+- **Spawn Trigger**: When player reaches within 200px of portal distance and stage 5 is complete
+- **Portal Platform**: Dedicated 96px wide golden/yellow platform created specifically for portal at exact spawn point
+- **Portal Visual**: 48x64px swirling animated portal with multi-colored rotating particles (cyan/magenta/yellow)
+- **Victory Trigger**: Player collision with portal hitbox transitions to victory state
+- **Victory Screen**: Full-screen celebration with "VICTORY!" text, final score, distance traveled, stage completion count, continuous fireworks particles (multi-colored explosions), celebratory music fanfare, "PRESS SPACE TO PLAY AGAIN" prompt
+- **Victory Behavior**: Game pauses on victory screen, does NOT auto-restart, only restarts when player presses Space or mobile button
 
-### 10.1 Technology Stack
-- **HTML5 Canvas** for rendering
-- **Vanilla JavaScript** (ES6+) for game logic
-- **Web Audio API** for sound (with fallback)
-- **No external game engines** - pure JS implementation
+## 19. Damage System & Death
+- **Health**: 3 hearts max, visible in HUD as pixel art hearts (full/empty states)
+- **Damage Sources**: Enemy contact (1 heart), bullets (1 heart), poop (1 heart), fire (1 heart)
+- **Invulnerability**: 1 second after damage with visual flash effect, prevents multi-hit
+- **Death Trigger**: Health reaches 0 or player falls below screen (Y > gameHeight + 50)
+- **Detailed Logging**: Console logs all damage with emojis (💔 enemy, 💥 bullet, 💩 poop, 🔥 fire, ☠️ death with cause and distance)
+- **Game Over**: State transitions to gameover, death sound plays, score displayed, restart prompt
 
-### 10.2 Architecture
-- Entity-Component system for game objects
-- Fixed timestep game loop (60 FPS target)
-- Separate update/render phases
-- Camera follows player with horizontal offset (player at 1/3 screen width)
-
-### 10.3 File Structure
-```
-index.html          - Entry point
-css/
-  style.css         - Minimal styling
-js/
-  main.js           - Game initialization & loop
-  player.js         - Player class
-  enemy.js          - Enemy classes
-  platform.js       - Platform generation
-  particle.js       - Visual effects
-  audio.js          - Sound manager
-  input.js          - Keyboard handler
-  collision.js      - Physics & collision detection
-assets/
-  sprites/          - PNG sprite sheets
-  audio/            - OGG/MP3 sound files
-```
-
-## 11. Progression & Difficulty
-- **Distance-Based Scaling**: Every 500 pixels increases enemy spawn rate by 10%
-- **Platform Gaps**: Gradually increase in width (max 4 tiles)
-- **No level cap**: Infinite runner style until death
-
-## 12. Performance Targets
-- 60 FPS on modern browsers (Chrome, Firefox, Safari)
-- <100ms input latency
-- <50MB total asset size
-- Mobile-friendly (responsive canvas scaling)
-
-## 13. Polish Features
-- **Screen Shake**: On kick/sword attacks (2 pixels, 0.1s)
-- **Particle Effects**: Star sparkles, enemy death puffs, landing dust
-- **Sprite Flashing**: Invulnerability frames after taking damage (1 second)
-- **Smooth Camera**: Lerp-based camera following (0.1 smoothing factor)
-
-## 14. Accessibility
-- **Colorblind Mode**: Option to change star color to yellow/blue
-- **Sound Toggle**: Mute button for music/SFX separately
-- **Keyboard-Only**: Fully playable without mouse
+## 20. Technical Features & Optimization
+- **Fixed Timestep**: 60 FPS game loop with accumulator (1/60s dt) for consistent physics
+- **Coyote Time**: 0.1s grace period after leaving platform for forgiving jumps
+- **Jump Buffer**: 0.15s input buffer to queue jump commands before landing
+- **Screen Shake**: Visual feedback for damage and impacts (shakeTime + shakeIntensity)
+- **Responsive Design**: Canvas auto-scales to window size maintaining 2:1 aspect ratio
+- **Mobile Optimization**: Touch controls auto-show on mobile devices, joystick position tracking
+- **Performance**: Platform culling (despawn when < camera.x - 200), enemy limits (max 8 on screen)
+- **Anti-Overlap**: Moving platforms use rightBound calculation (`x + width + moveDistance`) and sequential positioning to prevent overlaps
+- **Object Pooling**: Particles, bullets reuse objects to minimize GC pressure
 
 ---
 
-# Test Plan
-
-## Unit Tests
-
-### T1. Player Movement
-- **T1.1**: W key makes player jump with correct velocity
-- **T1.2**: A/D keys move player left/right at correct speed
-- **T1.3**: Player cannot move beyond left screen boundary
-- **T1.4**: Gravity applies correctly (player falls when airborne)
-- **T1.5**: Coyote time allows jump within 0.1s of leaving platform
-
-### T2. Combat Mechanics
-- **T2.1**: Z key triggers kick animation and hitbox
-- **T2.2**: X key triggers sword attack with correct reach
-- **T2.3**: Kick provides invulnerability during animation
-- **T2.4**: Jump attack works when landing on enemy from above
-- **T2.5**: Sword attack only hits enemies in front arc
-
-### T3. Platform Collision
-- **T3.1**: Player stands on solid platforms
-- **T3.2**: Player can jump through one-way platforms from below
-- **T3.3**: S+Jump drops player through one-way platforms
-- **T3.4**: Player collides with solid platform sides
-
-### T4. Enemy Behavior
-- **T4.1**: Goblin walks back/forth on platform correctly
-- **T4.2**: Bat follows sine wave flight pattern
-- **T4.3**: Armored Beetle requires 2 jump hits to defeat
-- **T4.4**: Enemies despawn when off-screen to the left
-- **T4.5**: Max 5 enemies enforced on screen
-
-### T5. Scoring System
-- **T5.1**: Stars add 5 points when collected
-- **T5.2**: Goblin defeat adds 10 points
-- **T5.3**: Bat defeat adds 20 points
-- **T5.4**: Beetle defeat adds 50 points
-- **T5.5**: Score persists across game session
-
-### T6. Health & Death
-- **T6.1**: Player starts with 3 hearts
-- **T6.2**: Enemy contact reduces health by 1
-- **T6.3**: Invulnerability frames prevent multi-hit
-- **T6.4**: Death occurs at 0 health
-- **T6.5**: Falling into pit triggers instant death
-
-## Integration Tests
-
-### T7. Game Flow
-- **T7.1**: Splash screen displays on load
-- **T7.2**: SPACE key transitions to gameplay
-- **T7.3**: Game over screen shows on death
-- **T7.4**: Retry returns to gameplay with reset state
-
-### T8. Audio System
-- **T8.1**: Music starts on game begin
-- **T8.2**: All sound effects trigger correctly
-- **T8.3**: Mute toggles work independently
-- **T8.4**: Audio works across browsers (Chrome, Firefox, Safari)
-
-### T9. Rendering
-- **T9.1**: Canvas scales correctly on window resize
-- **T9.2**: Pixel art maintains crisp edges (no blur)
-- **T9.3**: Parallax background scrolls at correct speeds
-- **T9.4**: HUD elements stay in fixed positions
-
-### T10. Performance
-- **T10.1**: Game maintains 60 FPS with 5 enemies + 10 stars
-- **T10.2**: No memory leaks after 5 minutes of gameplay
-- **T10.3**: Input responds within 100ms
-
-## User Acceptance Tests
-
-### T11. Playability
-- **T11.1**: Player can reach 1000 points on first try
-- **T11.2**: Controls feel responsive and intuitive
-- **T11.3**: Difficulty curve feels fair (not too easy/hard in first 2 mins)
-- **T11.4**: Visual clarity - enemies/platforms clearly distinguishable
-
-### T12. 90s Aesthetic
-- **T12.1**: Art style evokes NES/Atari era games
-- **T12.2**: Music sounds authentically 8-bit
-- **T12.3**: Color palette feels retro
-- **T12.4**: Splash screen captures 90s game nostalgia
-
-### T13. Cross-Browser
-- **T13.1**: Game runs on Chrome (latest)
-- **T13.2**: Game runs on Firefox (latest)
-- **T13.3**: Game runs on Safari (latest)
-- **T13.4**: Game runs on mobile browsers (touch controls not required)
-
----
-
-**Document Version**: 1.0
-**Status**: Awaiting Approval
-**Next Steps**: Upon approval, begin implementation with splash screen & core game loop
+**Version**: 2.0
+**Status**: Implemented & Playable
+**Configuration**: Edit `js/config.js` to adjust stage distances, physics, and difficulty scaling
