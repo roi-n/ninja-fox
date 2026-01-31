@@ -1,5 +1,8 @@
 // Game Configuration
 const GameConfig = {
+    // Game version
+    version: 'v1.0.0',
+
     // Pickup spawn distances (in pixels)
     magazineSpawnDistance: 1000,  // Spawn magazine every ~1000 pixels
     heartSpawnDistance: 2000,     // Spawn heart every ~2000 pixels

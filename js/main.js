@@ -861,6 +861,11 @@ class Game {
         this.ctx.textAlign = 'center';
         this.ctx.fillText('NINJA FOX', this.width / 2, 80);
 
+        // Version
+        this.ctx.fillStyle = '#00FFFF';
+        this.ctx.font = '10px "Courier New"';
+        this.ctx.fillText(GameConfig.version, this.width / 2, this.height - 30);
+
         // Draw larger, better ninja fox
         this.ctx.save();
         this.ctx.translate(this.width / 2 - 24, 90);
